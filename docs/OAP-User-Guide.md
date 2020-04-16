@@ -283,7 +283,6 @@ To apply Non-evictable cache strategy in your workload, please follow [prerequis
 For Parquet data format, provides following conf options:
 ```
 spark.sql.oap.parquet.data.cache.enable                  true 
-spark.sql.oap.fiberCache.memory.manager                  hybrid 
 spark.oap.cache.strategy                                 noevict 
 spark.sql.oap.fiberCache.persistent.memory.initial.size  256g 
 ```
@@ -291,7 +290,6 @@ For Orc data format, provides following conf options:
 ```
 spark.sql.orc.copyBatchToSpark                           true 
 spark.sql.oap.orc.data.cache.enable                      true 
-spark.sql.oap.fiberCache.memory.manager                  hybrid 
 spark.oap.cache.strategy                                 noevict 
 spark.sql.oap.fiberCache.persistent.memory.initial.size  256g 
 ```
@@ -305,7 +303,6 @@ For Parquet data format, provides following conf options:
 ```
  
 spark.sql.oap.parquet.data.cache.enable                    true 
-spark.sql.oap.fiberCache.memory.manager                    tmp 
 spark.oap.cache.strategy                                   vmem 
 spark.sql.oap.fiberCache.persistent.memory.initial.size    256g 
 spark.sql.oap.cache.guardian.memory.size                   10g      # according to your cluster
@@ -316,7 +313,6 @@ For Orc data format, provides following conf options:
 ```
 spark.sql.orc.copyBatchToSpark                             true 
 spark.sql.oap.orc.data.cache.enable                        true 
-spark.sql.oap.fiberCache.memory.manager                    tmp 
 spark.oap.cache.strategy                                   vmem 
 spark.sql.oap.fiberCache.persistent.memory.initial.size    256g
 spark.sql.oap.cache.guardian.memory.size                   10g      # according to your cluster   
@@ -355,7 +351,6 @@ spark.sql.oap.index.data.cache.separation.enable        true
 spark.oap.cache.strategy                                mix
 spark.sql.oap.fiberCache.memory.manager                 mix 
 spark.sql.oap.mix.index.memory.manager                  offheap
-spark.sql.oap.mix.data.memory.manager                   tmp
 spark.sql.oap.mix.index.cache.backend                   guava
 spark.sql.oap.mix.data.cache.backend                    vmem
 ```

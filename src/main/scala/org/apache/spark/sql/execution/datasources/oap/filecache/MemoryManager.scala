@@ -91,6 +91,31 @@ private[sql] object MemoryManager extends Logging {
    */
   private[filecache] val DUMMY_BLOCK_ID = TestBlockId("oap_memory_request_block")
 
+  private def checkConfCompatibility(cacheStrategy: String, memoryManagerOpt: String): Unit = {
+    cacheStrategy match {
+      case "guava" =>
+        if (!(memoryManagerOpt.equals("pm")||memoryManagerOpt.equals("offheap"))) {
+          throw new UnsupportedOperationException(s"For cache strategy" +
+            s" ${cacheStrategy}, memorymanager should be 'offheap' or 'pm'" +
+            s" but not ${memoryManagerOpt}.")
+        }
+      case "vmem" =>
+        if (!memoryManagerOpt.equals("tmp")) {
+          logWarning(s"current spark.sql.oap.fiberCache.memory.manager: ${memoryManagerOpt} " +
+            "takes no effect, use 'tmp' as memory manager for vmem cache instead.")
+        }
+      case "nonevict" =>
+        if (!memoryManagerOpt.equals("hybrid")) {
+          logWarning(s"current spark.sql.oap.fiberCache.memory.manager: ${memoryManagerOpt} " +
+            "takes no effect, use 'hybrid' as memory manager for nonevict cache instead.")
+        }
+      case _ =>
+        logInfo("current cache type may need further compatibility" +
+          " check against backend cache strategy and memory manager. " +
+          "Please refer enabling-indexdata-cache-separation part in OAP-User-Guide.md.")
+    }
+  }
+
   def apply(sparkEnv: SparkEnv): MemoryManager = {
     apply(sparkEnv, OapConf.OAP_FIBERCACHE_STRATEGY, FiberType.DATA)
   }
@@ -116,38 +141,34 @@ private[sql] object MemoryManager extends Logging {
         configEntry.defaultValue.get).toLowerCase
     val memoryManagerOpt =
       conf.get(OapConf.OAP_FIBERCACHE_MEMORY_MANAGER.key, "offheap").toLowerCase
+    checkConfCompatibility(cacheStrategyOpt, memoryManagerOpt)
     cacheStrategyOpt match {
-      case "guava" =>
-        memoryManagerOpt match {
-          case "offheap" | "pm" => apply(sparkEnv, memoryManagerOpt)
-          case _ => throw new UnsupportedOperationException(s"For cache strategy" +
-            s" ${cacheStrategyOpt}, memorymanager should be 'offheap' or 'pm'" +
-            s" but not ${memoryManagerOpt}.")
-        }
-      case "nonevict" =>
-          if (!memoryManagerOpt.equals("hybrid")) {
-            logWarning(s"current spark.sql.oap.fiberCache.memory.manager: ${memoryManagerOpt} " +
-              "takes no effect, use 'hybrid' as memory manager for nonevict cache instead.")
-          }
-          new HybridMemoryManager(sparkEnv)
-      case "vmem" =>
-        if (!memoryManagerOpt.equals("tmp")) {
-          logWarning(s"current spark.sql.oap.fiberCache.memory.manager: ${memoryManagerOpt} " +
-            "takes no effect, use 'tmp' as memory manager for vmem cache instead.")
-        }
-        new TmpDramMemoryManager(sparkEnv)
+      case "guava" => apply(sparkEnv, memoryManagerOpt)
+      case "nonevict" => new HybridMemoryManager(sparkEnv)
+      case "vmem" => new TmpDramMemoryManager(sparkEnv)
       case "mix" =>
-        fiberType match {
-          case FiberType.DATA =>
-            val dataMemoryManagerOpt =
-              conf.get(OapConf.OAP_MIX_DATA_MEMORY_MANAGER.key, "pm").toLowerCase
-            apply(sparkEnv, dataMemoryManagerOpt)
-          case FiberType.INDEX =>
-            val indexMemoryManagerOpt =
-              conf.get(OapConf.OAP_MIX_INDEX_MEMORY_MANAGER.key, "offheap").toLowerCase
-            apply(sparkEnv, indexMemoryManagerOpt)
-          case _ =>
-            null
+        if (!memoryManagerOpt.equals("mix")) {
+          apply(sparkEnv, memoryManagerOpt)
+        } else {
+          var cacheBackendOpt = ""
+          var mixMemoryMangerOpt = ""
+          fiberType match {
+            case FiberType.DATA =>
+              cacheBackendOpt =
+                conf.get(OapConf.OAP_MIX_DATA_CACHE_BACKEND.key, "guava").toLowerCase
+              mixMemoryMangerOpt =
+                conf.get(OapConf.OAP_MIX_DATA_MEMORY_MANAGER.key, "pm").toLowerCase
+            case FiberType.INDEX =>
+              cacheBackendOpt =
+                conf.get(OapConf.OAP_MIX_INDEX_CACHE_BACKEND.key, "guava").toLowerCase
+              mixMemoryMangerOpt =
+                conf.get(OapConf.OAP_MIX_INDEX_MEMORY_MANAGER.key, "offheap").toLowerCase
+          }
+          checkConfCompatibility(cacheBackendOpt, mixMemoryMangerOpt)
+          cacheBackendOpt match {
+            case "vmem" => new TmpDramMemoryManager(sparkEnv)
+            case _ => apply(sparkEnv, mixMemoryMangerOpt)
+          }
         }
       case _ => throw new UnsupportedOperationException(
         s"The cache strategy: ${cacheStrategyOpt} is not supported now")
