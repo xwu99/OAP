@@ -27,11 +27,11 @@ public interface ChunkAPI {
 
 
     /**
-     * update pMemManager.pMemMetaStore with <trunkID, pMemBlock>   ?????
+     * update pMemManager.pMemDataStore with <trunkID, pMemBlock>   ?????
      * @param id
      * @param pMemBlock
      */
-    public void putChunk(byte[] id, PMemBlock pMemBlock);
+    public void putChunk(byte[] id, UnsafeMemoryBlock pMemBlock);
 
     /**
      *
@@ -49,7 +49,7 @@ public interface ChunkAPI {
 
     /**
      * free pmem space when chunk life cycle end
-     * @param pMemBlock
+     * @param pMemChunk
      */
-    public void free(PMemBlock pMemBlock);
+    public void free(PMemChunk pMemChunk);
 }

@@ -57,7 +57,7 @@ public class SPDKChunkImpl implements ChunkAPI {
     }
 
     @Override
-    public void putChunk(byte[] id, PMemBlock pMemBlock) {
+    public void putChunk(byte[] id, UnsafeMemoryBlock pMemBlock) {
 
     }
 
@@ -72,7 +72,7 @@ public class SPDKChunkImpl implements ChunkAPI {
     }
 
     @Override
-    public void free(PMemBlock pMemBlock) {
+    public void free(PMemChunk pMemChunk) {
 
     }
 }

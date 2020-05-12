@@ -21,6 +21,7 @@ public class ChunkStreamAPITest {
         ChunkInputStream chunkInputStream = new ChunkInputStream(fileName);
         byte[] readData = new byte[3];
         chunkInputStream.read(readData);
+        chunkInputStream.close();
         Assert.assertArrayEquals(data, readData);
     }
 }

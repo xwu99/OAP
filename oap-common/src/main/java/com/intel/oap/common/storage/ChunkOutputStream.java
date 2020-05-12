@@ -1,7 +1,5 @@
 package com.intel.oap.common.storage;
 
-import javafx.application.Platform;
-
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -12,7 +10,7 @@ public class ChunkOutputStream extends FileOutputStream {
 
     private PMemManager pMemManager;
     private ByteBuffer byteBuffer;
-    private PMemBlock currentBlock;
+    private PMemChunk currentBlock;
 
     public ChunkOutputStream(String name, PMemManager pMemManager) throws FileNotFoundException {
         super(name);
@@ -27,8 +25,8 @@ public class ChunkOutputStream extends FileOutputStream {
     public void write(byte b[]) throws IOException {
         byteBuffer.put(b); // TODO overflow
         if(byteBuffer.remaining() == 0){ // FIXME
-            currentBlock = pMemManager.pMemMetaStore.getInputChunkIterator().next();
-            // Platform.copy???
+            currentBlock = pMemManager.pMemDataStore.getOutputChunkIterator().next();
+            currentBlock.writeDataToStore(b, -1, b.length);
         }
     }
 
