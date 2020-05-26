@@ -1003,8 +1003,7 @@ class ExternalCache(fiberType: FiberType) extends OapCache with Logging {
         fiberCache.occupy()
         cacheGuardian.addRemovalFiber(fiberId, fiberCache)
         fiberCache
-      }
-      else {
+      } else {
         val fiberCache = super.cache(fiberId)
         fiberCache.fiberId = fiberId
         fiberCache
