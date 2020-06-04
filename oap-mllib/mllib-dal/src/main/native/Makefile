@@ -23,10 +23,7 @@ OBJS += \
 ./OneCCL.o ./OneDAL.o ./KMeansDALImpl.o
 
 # Output Binary
-OUTPUT = ../../../target/scala-2.12/classes/libMLlibDAL.so
-
-#clang++ -Wall -w kmeans_oneccl.cpp -o kmeans_oneccl.exe -I$(CCL_ROOT)/include -I./ -Wl,--start-group $(DAALROOT)/lib/intel64/libdaal_core.so $(DAALROOT)/lib/intel64/libdaal_thread.so -L$(TBBROOT)/lib -L$(CCL_ROOT)/lib -ltbb -ltbbmalloc -ldl -lccl -Wl,--end-group
-
+OUTPUT = ../../../target/libMLlibDAL.so
 
 all: $(OUTPUT)
 

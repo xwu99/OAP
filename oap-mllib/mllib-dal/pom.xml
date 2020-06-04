@@ -124,28 +124,7 @@
                         </goals>
                     </execution>
                 </executions>
-            </plugin>
-
-            <!-- Copy dependencies for generating JNI headers-->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-dependency-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>copy-dependencies</id>
-                        <phase>process-classes</phase>
-                        <!--<phase>package</phase>-->
-                        <goals>
-                            <goal>copy-dependencies</goal>
-                        </goals>
-                        <configuration>
-                            <outputDirectory>${project.build.directory}/deps</outputDirectory>
-                            <overWriteReleases>false</overWriteReleases>
-                            <overWriteSnapshots>true</overWriteSnapshots>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
+            </plugin>           
 
             <plugin>
                 <artifactId>maven-antrun-plugin</artifactId>
@@ -154,20 +133,9 @@
                     <execution>
                         <phase>process-classes</phase>
                         <configuration>
-                            <target name="jni" description="Generate headers and compile the native code">
-                                <echo>Generating JNI headers</echo>
-                                <exec executable="javah">
-                                    <arg value="-d"/>
-                                    ${env.spar}
-                                    <arg value="${project.basedir}/src/main/native/javah"/>
-                                    <arg value="-classpath"/>
-                                    <arg value="${project.build.outputDirectory}:${project.build.directory}/deps/*"/>
-                                    <arg value="-force"/>
-                                    <arg value="org.apache.spark.ml.util.OneCCL$"/>
-                                    <arg value="org.apache.spark.ml.util.OneDAL$"/>
-                                    <arg value="org.apache.spark.ml.clustering.KMeansDALImpl"/>
-                                </exec>
-                                <exec dir="${project.basedir}/src/main/native" executable="make">
+                            <target name="build-natives" description="Build native code">
+                                <echo>Building native code</echo>                                
+                                <exec dir="${project.basedir}/src/main/native" executable="./build.sh">
                                 </exec>
                             </target>
                         </configuration>
