@@ -27,7 +27,7 @@ object OneCCL {
 
   println("Loading libMLlibDAL.so (OneCCL)" )
 //  System.loadLibrary("MLlibDAL")
-  System.load("/home/xiaochang/Works/mllib-dal/mllib/target/scala-2.12/classes/libMLlibDAL.so")
+  System.load("/home/xiaochang/Works/OAP/oap-mllib/mllib-dal/target/libMLlibDAL.so")
 
   var cclParam = new CCLParam()
 

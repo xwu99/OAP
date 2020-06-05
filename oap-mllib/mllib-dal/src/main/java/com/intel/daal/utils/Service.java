@@ -214,22 +214,14 @@ public class Service {
 
     public static boolean isUpper(NumericTable.StorageLayout layout)
     {
-        if (layout.ordinal() == NumericTable.StorageLayout.upperPackedSymmetricMatrix.ordinal()  ||
-            layout.ordinal() == NumericTable.StorageLayout.upperPackedTriangularMatrix.ordinal())
-        {
-            return true;
-        }
-        return false;
+        return layout.ordinal() == NumericTable.StorageLayout.upperPackedSymmetricMatrix.ordinal() ||
+                layout.ordinal() == NumericTable.StorageLayout.upperPackedTriangularMatrix.ordinal();
     }
 
     public static boolean isLower(NumericTable.StorageLayout layout)
     {
-        if (layout.ordinal() == NumericTable.StorageLayout.lowerPackedSymmetricMatrix.ordinal()  ||
-            layout.ordinal() == NumericTable.StorageLayout.lowerPackedTriangularMatrix.ordinal())
-        {
-            return true;
-        }
-        return false;
+        return layout.ordinal() == NumericTable.StorageLayout.lowerPackedSymmetricMatrix.ordinal() ||
+                layout.ordinal() == NumericTable.StorageLayout.lowerPackedTriangularMatrix.ordinal();
     }
 
     public static void printNumericTable(String header, NumericTable nt, long nPrintedRows, long nPrintedCols) {

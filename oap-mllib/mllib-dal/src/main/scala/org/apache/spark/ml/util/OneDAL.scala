@@ -31,7 +31,7 @@ object OneDAL {
 
   println("Loading libMLlibDAL.so (OneDAL)")
 //  System.loadLibrary("MLlibDAL")
-  System.load("/home/xiaochang/Works/mllib-dal/mllib/target/scala-2.12/classes//libMLlibDAL.so")
+  System.load("/home/xiaochang/Works/OAP/oap-mllib/mllib-dal/target/libMLlibDAL.so")
 
   // Convert DAL numeric table to array of vectors, TODO: improve perf
   def numericTableToVectors(table: NumericTable): Array[Vector] = {

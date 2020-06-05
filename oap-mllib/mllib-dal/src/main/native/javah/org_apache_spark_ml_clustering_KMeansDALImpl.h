@@ -20,8 +20,16 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_clustering_KMeansDALImpl_cKMean
  * Method:    cKMeansDALComputeWithInitCenters
  * Signature: (JJIII)J
  */
+// JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_clustering_KMeansDALImpl_cKMeansDALComputeWithInitCenters
+//   (JNIEnv *, jobject, jlong, jlong, jint, jint, jint);
+
+/*
+ * Class:     org_apache_spark_ml_clustering_KMeansDALImpl
+ * Method:    cKMeansDALComputeWithInitCenters
+ * Signature: (JJIIILcom/intel/daal/algorithms/KMeansResult;)J
+ */
 JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_clustering_KMeansDALImpl_cKMeansDALComputeWithInitCenters
-  (JNIEnv *, jobject, jlong, jlong, jint, jint, jint);
+  (JNIEnv *, jobject, jlong, jlong, jint, jint, jint, jobject);
 
 #ifdef __cplusplus
 }

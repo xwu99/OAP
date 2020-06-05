@@ -17,9 +17,9 @@
 
 package org.apache.spark.ml.clustering
 
+import com.intel.daal.algorithms.KMeansResult
 import com.intel.daal.data_management.data.HomogenNumericTable
 import com.intel.daal.services.DaalContext
-
 import org.apache.spark.ml.util.{Instrumentation, OneCCL, OneDAL}
 import org.apache.spark.mllib.clustering.{DistanceMeasure, KMeansModel => MLlibKMeansModel}
 import org.apache.spark.mllib.linalg.{Vector => OldVector, Vectors => OldVectors}
@@ -48,20 +48,22 @@ class KMeansDALImpl (var executorNum: Int,
       localData.unpack(context)
 
       val initCentroids = OneDAL.makeNumericTable(centers)
-      
+
+      var result = new KMeansResult()
       val cCentroids = cKMeansDALComputeWithInitCenters(
         localData.getCNumericTable,
         initCentroids.getCNumericTable,
         executorNum,
         nClusters,
-        maxIterations
+        maxIterations,
+        result
       )
 
       val ret = if (OneCCL.isRoot()) {
         assert(cCentroids != 0)
 
         val centerVectors = OneDAL.numericTableToVectors(OneDAL.makeNumericTable(cCentroids))
-        Iterator(centerVectors)
+        Iterator((centerVectors, result.totalCost))
       } else {
         Iterator.empty
       }
@@ -75,7 +77,8 @@ class KMeansDALImpl (var executorNum: Int,
     // Make sure there is only one result from rank 0
     assert(results.length == 1)
 
-    val centerVectors = results(0)
+    val centerVectors = results(0)._1
+    val totalCost = results(0)._2
 
 //    printNumericTable(centers)
 
@@ -83,26 +86,24 @@ class KMeansDALImpl (var executorNum: Int,
 
     instr.foreach(_.logInfo(s"OneDAL output centroids:\n${centerVectors.mkString("\n")}"))
 
-    // TODO: Add cost and tolerance support in DAL
-    val cost = 0.0
+    // TODO: tolerance support in DAL
     val iteration = maxIterations
 
 //    val centerVectors = OneDAL.numericTableToVectors(centers)
 
     val parentModel = new MLlibKMeansModel(
       centerVectors.map(OldVectors.fromML(_)),
-      distanceMeasure, cost, iteration)
+      distanceMeasure, totalCost, iteration)
 
     parentModel
   }
 
   // Single entry to call KMeans DAL backend, output HomogenNumericTable representing centers
-  @native private def cKMeansDALCompute(data: Long, block_num: Int,
-                                        cluster_num: Int, iteration_num: Int) : Long
+//  @native private def cKMeansDALCompute(data: Long, block_num: Int,
+//                                        cluster_num: Int, iteration_num: Int) : Long
 
   // Single entry to call KMeans DAL backend with initial centers, output centers
   @native private def cKMeansDALComputeWithInitCenters(data: Long, centers: Long, block_num: Int,
-                                        cluster_num: Int, iteration_num: Int) : Long
-
+                                        cluster_num: Int, iteration_num: Int, result: KMeansResult): Long
 
 }
