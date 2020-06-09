@@ -43,7 +43,12 @@ typedef double algorithmFPType; /* Algorithm floating-point type */
 
 static NumericTablePtr kmeans_compute(int rankId, const NumericTablePtr & pData, const NumericTablePtr & initialCentroids,
     size_t nClusters, size_t nBlocks, algorithmFPType &ret_cost)
-{    
+{
+    services::Environment::getInstance()->setNumberOfThreads(4);
+
+    int nThreadsNew = services::Environment::getInstance()->getNumberOfThreads();
+    cout << "Number of threads used for DAL: " << nThreadsNew << endl;
+
     const bool isRoot          = (rankId == ccl_root);
     size_t CentroidsArchLength = 0;
     InputDataArchive inputArch;
