@@ -1,5 +1,5 @@
-CC := clang
-CXX := clang++
+CC := gcc
+CXX := g++
 RM := rm -rf
 
 CCL_ROOT=/home/xiaochang/Works/mlsl2/build/_install
