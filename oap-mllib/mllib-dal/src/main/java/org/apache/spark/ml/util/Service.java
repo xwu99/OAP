@@ -21,7 +21,7 @@
  ////////////////////////////////////////////////////////////////////////////////
  */
 
-package com.intel.daal.utils;
+package org.apache.spark.ml.util;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
