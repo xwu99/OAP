@@ -309,9 +309,9 @@ class KMeans @Since("1.5.0") (
   override def fit(dataset: Dataset[_]): KMeansModel = instrumented { instr =>
     transformSchema(dataset.schema, logging = true)
 
+    // will handle persistence only for trainWithML
+//    val handlePersistence = (dataset.storageLevel == StorageLevel.NONE && $(distanceMeasure) != "euclidean")
     val handlePersistence = dataset.storageLevel == StorageLevel.NONE
-
-//    val instances = DatasetUtils.columnToOldVector(dataset, getFeaturesCol)
 
     val instances: RDD[Vector] = dataset
       .select(DatasetUtils.columnToVector(dataset, getFeaturesCol)).rdd.map {
@@ -397,13 +397,20 @@ class KMeans @Since("1.5.0") (
 
     // Repartition and convert to RDD[HomogenNumericTable]
     val repartitioned = instances.repartition(executor_num)
+//    val repartitioned = instances.coalesce(executor_num)
     //    repartitioned.map { v => v.toArray.mkString(",") } .saveAsTextFile("part.csv")
-    val numericTables: RDD[HomogenNumericTable] = OneDAL.rddVectorToRDDNumericTable(repartitioned)
+//    val numericTables: RDD[HomogenNumericTable] = OneDAL.rddVectorToRDDNumericTable(repartitioned)
+
+//    numericTables.count()
+
+    // Release instances to save memory
+//    instances.unpersist()
 
     val kmeansDAL = new KMeansDALImpl(executor_num, getK, getMaxIter, getTol,
       DistanceMeasure.EUCLIDEAN, centers)
 
-    val parentModel = kmeansDAL.run(numericTables, Option(instr))
+//    val parentModel = kmeansDAL.run(numericTables, Option(instr))
+    val parentModel = kmeansDAL.runWithRDDVector(repartitioned, Option(instr))
 
     val model = copyValues(new KMeansModel(uid, parentModel).setParent(this))
 
