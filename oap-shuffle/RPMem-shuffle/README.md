@@ -10,9 +10,13 @@ RPMem extension for Spark Shuffle (previously Spark-PMoF), is a Spark Shuffle Pl
 
 ## Introduction
 Remote Persistent Memory shuffle plugin is a Spark shuffle plugin that leverage Persistent Memory as shuffle media, and high performance fabrics powered NICs like RDMA to improve Spark shuffle performance. it:
-• Leverage high performance persistent memory as shuffle media as well as spill media,increased shuffle performance and reduced memory footprint
-• Using PMDK libs to avoid inefficient context switches and memory copies with zerocopy remote access to persistent memory.
-• Leveraging RDMA for network offloading
+
+- Leverage high performance persistent memory as shuffle media as well as spill media,increased shuffle performance and reduced memory footprint
+  
+- Using PMDK libs to avoid inefficient context switches and memory copies with zerocopy remote access to persistent memory.
+  
+- Leveraging RDMA for network offloading
+
 
 ## Installation
 Make sure you got [HPNL](https://github.com/Intel-bigdata/HPNL) installed.
