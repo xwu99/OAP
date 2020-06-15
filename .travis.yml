@@ -95,6 +95,7 @@ jobs:
       - cd /tmp
       - git clone https://github.com/efficient/libcuckoo && cd libcuckoo && mkdir build && cd build  && cmake -DCMAKE_INSTALL_PREFIX=/usr/local -DBUILD_EXAMPLES=1 -DBUILD_TESTS=1 ..
       - make all && sudo make install
+      script:
       - cd ${TRAVIS_BUILD_DIR}/oap-shuffle/RPMem-shuffle
       # skip tests, do tests locally 
       - sudo mvn install -DskipTests -B -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn
