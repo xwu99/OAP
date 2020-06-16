@@ -396,7 +396,7 @@ class KMeans @Since("1.5.0") (
     logInfo(f"Initialization with $strInitMode took $initTimeInSeconds%.3f seconds.")
 
     // Repartition and convert to RDD[HomogenNumericTable]
-    val repartitioned = instances.repartition(executor_num)
+    val repartitioned = instances.repartition(executor_num).cache()
 //    val repartitioned = instances.coalesce(executor_num)
     //    repartitioned.map { v => v.toArray.mkString(",") } .saveAsTextFile("part.csv")
 //    val numericTables: RDD[HomogenNumericTable] = OneDAL.rddVectorToRDDNumericTable(repartitioned)

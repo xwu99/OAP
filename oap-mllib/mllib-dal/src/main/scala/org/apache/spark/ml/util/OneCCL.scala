@@ -25,9 +25,10 @@ import org.apache.spark.SparkConf
 
 object OneCCL {
 
-  println("Loading libMLlibDAL.so (OneCCL)" )
-//  System.loadLibrary("MLlibDAL")
-  System.load("/home/xiaochang/Works/OAP/oap-mllib/mllib-dal/target/libMLlibDAL.so")
+  println("oneCCL: Loading libMLlibDAL.so" )
+
+  // extract libMLlibDAL.so to temp file and load, TODO: remove duplicate loads
+  LibUtils.loadLibrary()
 
   var cclParam = new CCLParam()
 
@@ -80,7 +81,7 @@ object OneCCL {
   def init(executor_num: Int)= {
     checkEnv()
 
-    println(s"KVS IP Port: $kvsIPPort")
+    println(s"oneCCL: Initializing with KVS IP Port: $kvsIPPort")
 
     // cclParam is output from native code
     c_init(cclParam)
@@ -88,7 +89,7 @@ object OneCCL {
     // executor number should equal to oneCCL world size
     assert(executor_num == cclParam.commSize, "executor number should equal to oneCCL world size")
 
-    println(s"executorNum: $executor_num, commSize, ${cclParam.commSize}, rankId: ${cclParam.rankId}")
+    println(s"oneCCL: Initialized with executorNum: $executor_num, commSize, ${cclParam.commSize}, rankId: ${cclParam.rankId}")
 
   }
 

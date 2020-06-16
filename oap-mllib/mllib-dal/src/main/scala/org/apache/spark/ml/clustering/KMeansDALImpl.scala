@@ -20,7 +20,7 @@ package org.apache.spark.ml.clustering
 import com.intel.daal.algorithms.KMeansResult
 import com.intel.daal.data_management.data.{HomogenNumericTable, NumericTable, Matrix => DALMatrix}
 import com.intel.daal.services.DaalContext
-import org.apache.spark.ml.util.{Instrumentation, OneCCL, OneDAL, Service}
+import org.apache.spark.ml.util._
 import org.apache.spark.mllib.clustering.{DistanceMeasure, KMeansModel => MLlibKMeansModel}
 import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.ml.util.OneDAL.setNumericTableValue
@@ -39,7 +39,9 @@ class KMeansDALImpl (var executorNum: Int,
 
     instr.foreach(_.logInfo(s"Processing partitions with $executorNum executors"))
 
-    val results = data.mapPartitions { it: Iterator[Vector]=>
+    val partitionDims = Utils.getPartitionDims(data)
+
+    val results = data.mapPartitionsWithIndex { (index: Int, it: Iterator[Vector]) =>
 
       // Set number of thread to use for each dal process, TODO: set through config
       //      OneDAL.setNumberOfThread(1)
@@ -47,32 +49,29 @@ class KMeansDALImpl (var executorNum: Int,
       // Assume each partition of RDD[HomogenNumericTable] has only one NumericTable
 //      val localData = p.next()
 
-      var arrayData = it.toSeq
-      val numCols = arrayData.head.size
-      val numRows: Int = arrayData.size
 
-      println(s"numCols: $numCols, numRows: $numRows")
+//      val arrayData = it.toArray
+      val numRows = partitionDims(index)._1
+      val numCols = partitionDims(index)._2
+
+      println(s"partition index: $index, numCols: $numCols, numRows: $numRows")
 
       val context = new DaalContext()
       val localData = new DALMatrix(context, classOf[java.lang.Double],
         numCols.toLong, numRows.toLong, NumericTable.AllocationFlag.DoAllocate)
 
-      arrayData.zipWithIndex.foreach {
+      it.zipWithIndex.foreach {
         case (v, rowIndex) =>
           for (colIndex <- 0 until numCols)
           //            matrix.set(rowIndex, colIndex, row.getString(colIndex).toDouble)
             setNumericTableValue(localData.getCNumericTable, rowIndex, colIndex, v(colIndex))
       }
 
-      // release arrayData
-//      arrayData = null
-
-      Service.printNumericTable("10 rows of local input data", localData, 10)
+//      Service.printNumericTable("10 rows of local input data", localData, 10)
 
       OneCCL.init(executorNum)
 
       val initCentroids = OneDAL.makeNumericTable(centers)
-
       var result = new KMeansResult()
       val cCentroids = cKMeansDALComputeWithInitCenters(
         localData.getCNumericTable,

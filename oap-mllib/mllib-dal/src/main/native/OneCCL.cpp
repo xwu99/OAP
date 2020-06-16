@@ -1,3 +1,4 @@
+#include <iostream>
 #include <ccl.h>
 #include "org_apache_spark_ml_util_OneCCL__.h"
 
@@ -65,7 +66,7 @@ static void test_allreduce(int rank, int size) {
 JNIEXPORT jint JNICALL Java_org_apache_spark_ml_util_OneCCL_00024_c_1init
   (JNIEnv *env, jobject obj, jobject param) {
   
-  printf("oneCCL init\n");
+  std::cout << "\noneCCL: init" << std::endl;
 
   ccl_init();  
 
@@ -95,9 +96,9 @@ JNIEXPORT jint JNICALL Java_org_apache_spark_ml_util_OneCCL_00024_c_1init
 JNIEXPORT void JNICALL Java_org_apache_spark_ml_util_OneCCL_00024_c_1cleanup
   (JNIEnv *env, jobject obj) {
 
-   printf("oneCCL cleanup\n");
+  std::cout << "\noneCCL: cleanup" << std::endl;   
 
-   ccl_finalize();
+  ccl_finalize();
 }
 
 /*

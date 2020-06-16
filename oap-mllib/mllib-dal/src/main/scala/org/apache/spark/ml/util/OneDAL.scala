@@ -19,6 +19,7 @@ package org.apache.spark.ml.util
 
 import com.intel.daal.data_management.data.{HomogenNumericTable, NumericTable, Matrix => DALMatrix}
 import com.intel.daal.services.DaalContext
+//import com.intel.daal.services.Environment
 import org.apache.spark.ml.linalg.{Vector, Vectors}
 import org.apache.spark.mllib.linalg.{Vector => OldVector, Vectors => OldVectors}
 import org.apache.spark.rdd.RDD
@@ -29,9 +30,15 @@ import scala.collection.mutable.ArrayBuffer
 
 object OneDAL {
 
-  println("Loading libMLlibDAL.so (OneDAL)")
-//  System.loadLibrary("MLlibDAL")
-  System.load("/home/xiaochang/Works/OAP/oap-mllib/mllib-dal/target/libMLlibDAL.so")
+  println("oneDAL: Loading libMLlibDAL.so")
+
+  // extract libMLlibDAL.so to temp file and load, TODO: remove duplicate loads
+  LibUtils.loadLibrary()
+
+//  def setNumberOfThread(thread_num: Int): Unit = {
+//    println(s"oneDAL: setNumberOfThread: $thread_num")
+//    Environment.setNumberOfThreads(thread_num)
+//  }
 
   // Convert DAL numeric table to array of vectors, TODO: improve perf
   def numericTableToVectors(table: NumericTable): Array[Vector] = {
@@ -88,7 +95,7 @@ object OneDAL {
   def rddVectorToRDDNumericTable(instances: RDD[Vector]): RDD[HomogenNumericTable] = {
     val tablesRDD = instances.mapPartitions(
       (it: Iterator[Vector]) => {
-
+        println("oneDAL: rddVectorToRDDNumericTable")
         val tables = new ArrayBuffer[HomogenNumericTable]()
         // here we need get the numRows, so convert the iterator to array.
         val arrayData = it.toArray
@@ -106,7 +113,7 @@ object OneDAL {
               setNumericTableValue(matrix.getCNumericTable, rowIndex, colIndex, v(colIndex))
         }
 
-//        Service.printNumericTable("input matrix:", matrix)
+        Service.printNumericTable("oneDAL: First 10 rows of input matrix :", matrix, 10)
 
         matrix.pack()
         tables += matrix
@@ -114,7 +121,8 @@ object OneDAL {
         context.dispose()
         tables.iterator
       }
-    ).persist(StorageLevel.MEMORY_AND_DISK)
+    )
+//      .persist(StorageLevel.MEMORY_AND_DISK)
     tablesRDD
   }
 

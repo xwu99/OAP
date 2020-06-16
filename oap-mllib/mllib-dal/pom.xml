@@ -12,6 +12,8 @@
     <url>https://github.com/Intel-bigdata/OAP</url>
 
     <properties>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <scala.version>2.12.10</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
@@ -151,9 +153,10 @@
                 <version>3.0.0</version>
                 <configuration>
                     <appendAssemblyId>true</appendAssemblyId>
-                    <descriptorRefs>
-                        <descriptorRef>jar-with-dependencies</descriptorRef>
-                    </descriptorRefs>
+                    <descriptors>
+                        <!-- use customized assembly to include *.so -->
+                        <descriptor>src/assembly/assembly.xml</descriptor>
+                    </descriptors>
                 </configuration>
                 <executions>
                     <execution>
