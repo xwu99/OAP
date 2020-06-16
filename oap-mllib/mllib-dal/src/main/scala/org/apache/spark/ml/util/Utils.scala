@@ -1,5 +1,6 @@
 package org.apache.spark.ml.util
 
+import org.apache.spark.SparkConf
 import org.apache.spark.rdd.RDD
 import org.apache.spark.ml.linalg.Vector
 
@@ -31,5 +32,26 @@ object Utils {
     }
 
     ret
+  }
+
+  // Run on Driver
+  def sparkExecutorNum(): Int = {
+    val conf = new SparkConf()
+
+    val executorNum = conf.getInt("spark.executor.instances", -1)
+
+    assert(executorNum != -1, message = "spark.executor.instances not set")
+
+    executorNum
+  }
+
+  def sparkExecutorCores(): Int = {
+    val conf = new SparkConf(true)
+
+    val executorCores = conf.getInt("spark.executor.cores", -1)
+
+    assert(executorCores != -1, message = "spark.executor.cores not set")
+
+    executorCores
   }
 }

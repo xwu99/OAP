@@ -60,21 +60,10 @@ object OneCCL {
       .setExecutorEnv("CCL_KVS_IP_EXCHANGE","env")
       .setExecutorEnv("CCL_KVS_IP_PORT", ccl_root_ipport)
       .setExecutorEnv("CCL_ROOT", ccl_root_path)
-      .setExecutorEnv("CCL_WORLD_SIZE", sparkExecutorNum().toString)
+      .setExecutorEnv("CCL_WORLD_SIZE", Utils.sparkExecutorNum().toString)
       .setExecutorEnv("I_MPI_ROOT", ccl_root_path)
       .setExecutorEnv("CCL_ATL_TRANSPORT_PATH", s"$ccl_root_path/lib")
       .setExecutorEnv("FI_PROVIDER_PATH",s"$ccl_root_path/lib/prov")
-  }
-
-  // Run on Driver
-  def sparkExecutorNum(): Int = {
-    val conf = new SparkConf()
-
-    val executorNum = conf.getInt("spark.executor.instances", -1)
-
-    assert(executorNum != -1, message = "spark.executor.instances not set")
-
-    executorNum
   }
 
   // Run on Executor
