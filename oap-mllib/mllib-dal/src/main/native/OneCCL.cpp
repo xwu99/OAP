@@ -66,9 +66,9 @@ static void test_allreduce(int rank, int size) {
 JNIEXPORT jint JNICALL Java_org_apache_spark_ml_util_OneCCL_00024_c_1init
   (JNIEnv *env, jobject obj, jobject param) {
   
-  std::cout << "\noneCCL: init" << std::endl;
+  std::cout << "oneCCL (native): init" << std::endl;
 
-  ccl_init();  
+  ccl_init();
 
   jclass cls = env->GetObjectClass(param);
   jfieldID fid_comm_size = env->GetFieldID(cls, "commSize", "J");
@@ -96,7 +96,7 @@ JNIEXPORT jint JNICALL Java_org_apache_spark_ml_util_OneCCL_00024_c_1init
 JNIEXPORT void JNICALL Java_org_apache_spark_ml_util_OneCCL_00024_c_1cleanup
   (JNIEnv *env, jobject obj) {
 
-  std::cout << "\noneCCL: cleanup" << std::endl;   
+  std::cout << "oneCCL (native): cleanup" << std::endl;
 
   ccl_finalize();
 }

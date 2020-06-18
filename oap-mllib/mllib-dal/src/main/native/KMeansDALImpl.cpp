@@ -44,11 +44,6 @@ typedef double algorithmFPType; /* Algorithm floating-point type */
 static NumericTablePtr kmeans_compute(int rankId, const NumericTablePtr & pData, const NumericTablePtr & initialCentroids,
     size_t nClusters, size_t nBlocks, algorithmFPType &ret_cost)
 {
-    services::Environment::getInstance()->setNumberOfThreads(1);
-
-    int nThreadsNew = services::Environment::getInstance()->getNumberOfThreads();
-    cout << "oneDAL: Number of threads used: " << nThreadsNew << endl;
-
     const bool isRoot          = (rankId == ccl_root);
     size_t CentroidsArchLength = 0;
     InputDataArchive inputArch;
@@ -200,13 +195,16 @@ static NumericTablePtr kmeans_compute(int rankId, const NumericTablePtr & pData,
 //     return (jlong)0;
 // }
 
+
 /*
  * Class:     org_apache_spark_ml_clustering_KMeansDALImpl
  * Method:    cKMeansDALComputeWithInitCenters
- * Signature: (JJIIILcom/intel/daal/algorithms/KMeansResult;)J
+ * Signature: (JJIIIILcom/intel/daal/algorithms/KMeansResult;)J
  */
 JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_clustering_KMeansDALImpl_cKMeansDALComputeWithInitCenters
-  (JNIEnv *env, jobject obj, jlong pNumTabData, jlong pNumTabCenters, jint block_num, jint cluster_num, jint iteration_num, 
+  (JNIEnv *env, jobject obj,
+  jlong pNumTabData, jlong pNumTabCenters, jint cluster_num, jint iteration_num,
+  jint executor_num, jint executor_cores,
   jobject resultObj) {
 
   size_t rankId;
@@ -215,17 +213,23 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_clustering_KMeansDALImpl_cKMean
   NumericTablePtr pData = *((NumericTablePtr *)pNumTabData);
   NumericTablePtr centroids = *((NumericTablePtr *)pNumTabCenters);
 
+  // Set number of threads for oneDAL to use for each rank
+  services::Environment::getInstance()->setNumberOfThreads(executor_cores);
+
+  int nThreadsNew = services::Environment::getInstance()->getNumberOfThreads();
+  cout << "oneDAL (native): Number of threads used: " << nThreadsNew << endl;
+
   algorithmFPType totalCost;
 
-  for (size_t it = 0; it < iteration_num; it++) {
-    std::cout << "KMeans: iteration " << it << std::endl;
-    centroids = kmeans_compute(rankId, pData, centroids, cluster_num, block_num, totalCost);
+  for (size_t it = 0; it < (size_t)iteration_num; it++) {
+    std::cout << "KMeans (native): iteration " << it << std::endl;
+    centroids = kmeans_compute(rankId, pData, centroids, cluster_num, executor_num, totalCost);
   }
 
   if (rankId == ccl_root) {
-    printf("\n");
-    printNumericTable(centroids, "KMeans: First 10 rows of final result:", 10);
-    printf("KMeans: totalCost: %f\n", totalCost);
+//    printf("\n");
+//    printNumericTable(centroids, "KMeans: First 10 rows of final result:", 10);
+//    printf("KMeans: totalCost: %f\n", totalCost);
 
     // Get the class of the input object
     jclass clazz = env->GetObjectClass(resultObj);

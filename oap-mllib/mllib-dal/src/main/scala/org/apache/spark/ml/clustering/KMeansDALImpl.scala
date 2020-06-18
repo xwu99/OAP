@@ -27,12 +27,14 @@ import org.apache.spark.ml.util.OneDAL.setNumericTableValue
 import org.apache.spark.mllib.linalg.{Vector => OldVector, Vectors => OldVectors}
 import org.apache.spark.rdd.RDD
 
-class KMeansDALImpl (var executorNum: Int,
+class KMeansDALImpl (
   var nClusters : Int = 4,
   var maxIterations : Int = 10,
   var tolerance : Double = 1e-6,
   val distanceMeasure: String = DistanceMeasure.EUCLIDEAN,
-  val centers: Array[OldVector] = null
+  val centers: Array[OldVector] = null,
+  val executorNum: Int,
+  val executorCores: Int
 ) extends Serializable {
 
   def runWithRDDVector(data: RDD[Vector], instr: Option[Instrumentation]) : MLlibKMeansModel = {
@@ -54,18 +56,30 @@ class KMeansDALImpl (var executorNum: Int,
       val numRows = partitionDims(index)._1
       val numCols = partitionDims(index)._2
 
-      println(s"partition index: $index, numCols: $numCols, numRows: $numRows")
+      println(s"KMeansDALImpl: Partition index: $index, numCols: $numCols, numRows: $numRows")
+      println("KMeansDALImpl: Loading libMLlibDAL.so" )
+      // extract libMLlibDAL.so to temp file and load
+      LibUtils.loadLibrary()
 
+      // Build DALMatrix
       val context = new DaalContext()
       val localData = new DALMatrix(context, classOf[java.lang.Double],
         numCols.toLong, numRows.toLong, NumericTable.AllocationFlag.DoAllocate)
 
+      println(s"KMeansDALImpl: Start data conversion")
+
+      val start = System.nanoTime
       it.zipWithIndex.foreach {
         case (v, rowIndex) =>
           for (colIndex <- 0 until numCols)
-          //            matrix.set(rowIndex, colIndex, row.getString(colIndex).toDouble)
+            // TODO: Add matrix.set API in DAL to replace this
+            // matrix.set(rowIndex, colIndex, row.getString(colIndex).toDouble)
             setNumericTableValue(localData.getCNumericTable, rowIndex, colIndex, v(colIndex))
       }
+
+      val duration = (System.nanoTime - start) / 1E9
+
+      println(s"KMeansDALImpl: Data conversion takes $duration seconds")
 
 //      Service.printNumericTable("10 rows of local input data", localData, 10)
 
@@ -76,9 +90,10 @@ class KMeansDALImpl (var executorNum: Int,
       val cCentroids = cKMeansDALComputeWithInitCenters(
         localData.getCNumericTable,
         initCentroids.getCNumericTable,
-        executorNum,
         nClusters,
         maxIterations,
+        executorNum,
+        executorCores,
         result
       )
 
@@ -143,9 +158,10 @@ class KMeansDALImpl (var executorNum: Int,
       val cCentroids = cKMeansDALComputeWithInitCenters(
         localData.getCNumericTable,
         initCentroids.getCNumericTable,
-        executorNum,
         nClusters,
         maxIterations,
+        executorNum,
+        executorCores,
         result
       )
 
@@ -193,7 +209,10 @@ class KMeansDALImpl (var executorNum: Int,
 //                                        cluster_num: Int, iteration_num: Int) : Long
 
   // Single entry to call KMeans DAL backend with initial centers, output centers
-  @native private def cKMeansDALComputeWithInitCenters(data: Long, centers: Long, block_num: Int,
-                                        cluster_num: Int, iteration_num: Int, result: KMeansResult): Long
+  @native private def cKMeansDALComputeWithInitCenters(data: Long, centers: Long,
+                                                       cluster_num: Int, iteration_num: Int,
+                                                       executor_num: Int,
+                                                       executor_cores: Int,
+                                                       result: KMeansResult): Long
 
 }

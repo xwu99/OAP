@@ -48,9 +48,8 @@ object Utils {
   def sparkExecutorCores(): Int = {
     val conf = new SparkConf(true)
 
-    val executorCores = conf.getInt("spark.executor.cores", -1)
-
-    assert(executorCores != -1, message = "spark.executor.cores not set")
+    // Use 1 if not set
+    val executorCores = conf.getInt("spark.executor.cores", 1)
 
     executorCores
   }

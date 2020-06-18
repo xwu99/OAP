@@ -4,7 +4,7 @@ RM := rm -rf
 
 CCL_ROOT=/home/xiaochang/Works/mlsl2/build/_install
 
-CFLAGS := -g -Wall -fPIC
+CFLAGS := -g -Wall -fPIC -std=c++11
 INCS := -I $(JAVA_HOME)/include \
         -I $(JAVA_HOME)/include/linux \
         -I $(CCL_ROOT)/include \

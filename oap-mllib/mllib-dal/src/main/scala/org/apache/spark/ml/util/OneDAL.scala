@@ -30,16 +30,6 @@ import scala.collection.mutable.ArrayBuffer
 
 object OneDAL {
 
-  println("oneDAL: Loading libMLlibDAL.so")
-
-  // extract libMLlibDAL.so to temp file and load, TODO: remove duplicate loads
-  LibUtils.loadLibrary()
-
-//  def setNumberOfThread(thread_num: Int): Unit = {
-//    println(s"oneDAL: setNumberOfThread: $thread_num")
-//    Environment.setNumberOfThreads(thread_num)
-//  }
-
   // Convert DAL numeric table to array of vectors, TODO: improve perf
   def numericTableToVectors(table: NumericTable): Array[Vector] = {
     val numRows = table.getNumberOfRows.toInt

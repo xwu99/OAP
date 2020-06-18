@@ -19,16 +19,7 @@ package org.apache.spark.ml.util
 
 import org.apache.spark.SparkConf
 
-//class OneCCL {
-//
-//}
-
 object OneCCL {
-
-  println("oneCCL: Loading libMLlibDAL.so" )
-
-  // extract libMLlibDAL.so to temp file and load, TODO: remove duplicate loads
-  LibUtils.loadLibrary()
 
   var cclParam = new CCLParam()
 

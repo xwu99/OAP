@@ -310,8 +310,8 @@ class KMeans @Since("1.5.0") (
     transformSchema(dataset.schema, logging = true)
 
     // will handle persistence only for trainWithML
-//    val handlePersistence = (dataset.storageLevel == StorageLevel.NONE && $(distanceMeasure) != "euclidean")
-    val handlePersistence = dataset.storageLevel == StorageLevel.NONE
+    val handlePersistence = (dataset.storageLevel == StorageLevel.NONE && $(distanceMeasure) != "euclidean")
+//    val handlePersistence = dataset.storageLevel == StorageLevel.NONE
 
     val instances: RDD[Vector] = dataset
       .select(DatasetUtils.columnToVector(dataset, getFeaturesCol)).rdd.map {
@@ -328,6 +328,7 @@ class KMeans @Since("1.5.0") (
       maxIter, seed, tol)
 
     val model = if ($(distanceMeasure) == "euclidean") {
+      instances.setName("instancesRDD").cache()
       trainWithDAL(instances)
     } else {
       trainWithML(instances)
@@ -361,7 +362,8 @@ class KMeans @Since("1.5.0") (
 
   private def trainWithDAL(instances: RDD[Vector]): KMeansModel = instrumented { instr =>
 
-    val executor_num = OneCCL.sparkExecutorNum()
+    val executor_num = Utils.sparkExecutorNum()
+    val executor_cores = Utils.sparkExecutorCores()
 
     logInfo(s"KMeansDAL fit using $executor_num Executors")
 
@@ -396,18 +398,18 @@ class KMeans @Since("1.5.0") (
     logInfo(f"Initialization with $strInitMode took $initTimeInSeconds%.3f seconds.")
 
     // Repartition and convert to RDD[HomogenNumericTable]
-    val repartitioned = instances.repartition(executor_num).cache()
-//    val repartitioned = instances.coalesce(executor_num)
-    //    repartitioned.map { v => v.toArray.mkString(",") } .saveAsTextFile("part.csv")
-//    val numericTables: RDD[HomogenNumericTable] = OneDAL.rddVectorToRDDNumericTable(repartitioned)
+    val repartitioned = instances.repartition(executor_num).setName("Repartitioned for conversion").cache()
+//    val repartitioned = instances.coalesce(executor_num).setName("Coalesced for conversion")
+//    repartitioned.count()
 
+//    val numericTables: RDD[HomogenNumericTable] = OneDAL.rddVectorToRDDNumericTable(repartitioned)
 //    numericTables.count()
 
     // Release instances to save memory
 //    instances.unpersist()
 
-    val kmeansDAL = new KMeansDALImpl(executor_num, getK, getMaxIter, getTol,
-      DistanceMeasure.EUCLIDEAN, centers)
+    val kmeansDAL = new KMeansDALImpl(getK, getMaxIter, getTol,
+      DistanceMeasure.EUCLIDEAN, centers, executor_num, executor_cores)
 
 //    val parentModel = kmeansDAL.run(numericTables, Option(instr))
     val parentModel = kmeansDAL.runWithRDDVector(repartitioned, Option(instr))
