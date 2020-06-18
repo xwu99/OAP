@@ -4,6 +4,7 @@
 #include "service.h"
 #include "org_apache_spark_ml_clustering_KMeansDALImpl.h"
 #include <iostream>
+#include <chrono>
 
 using namespace std;
 using namespace daal;
@@ -222,8 +223,11 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_clustering_KMeansDALImpl_cKMean
   algorithmFPType totalCost;
 
   for (size_t it = 0; it < (size_t)iteration_num; it++) {
-    std::cout << "KMeans (native): iteration " << it << std::endl;
+    auto t1 = std::chrono::high_resolution_clock::now();
     centroids = kmeans_compute(rankId, pData, centroids, cluster_num, executor_num, totalCost);
+    auto t2 = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::seconds>( t2 - t1 ).count();
+    std::cout << "KMeans (native): iteration " << it << " took " << duration << " secs" << std::endl;
   }
 
   if (rankId == ccl_root) {
