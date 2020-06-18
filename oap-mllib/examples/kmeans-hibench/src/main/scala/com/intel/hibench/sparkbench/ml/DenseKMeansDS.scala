@@ -95,7 +95,7 @@ object DenseKMeansDS {
       var vector: Array[Double] = new Array[Double](v.get().size)
       for (i <- 0 until v.get().size) vector(i) = v.get().get(i)
       Tuple1(Vectors.dense(vector))
-    }.toDF("features").cache()
+    }.toDF("features")
 
     val numExamples = dataset.count()
 
@@ -120,4 +120,3 @@ object DenseKMeansDS {
     spark.stop()
   }
 }
-
