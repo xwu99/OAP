@@ -8,11 +8,11 @@ export HADOOP_HOME=/home/xiaochang/opt/hadoop-2.7.3
 export HADOOP_CONF_DIR=$HADOOP_HOME/etc/hadoop
 
 SPARK_MASTER=yarn
-
-SPARK_NUM_EXECUTORS=2
-SPARK_EXECUTOR_CORES=2
-SPARK_EXECUTOR_MEMORY=2G
-SPARK_DRIVER_MEMORY=1G
+SPARK_DRIVER_MEMORY=8G
+SPARK_NUM_EXECUTORS=18
+SPARK_EXECUTOR_CORES=5
+SPARK_EXECUTOR_MEMORY_OVERHEAD=25G
+SPARK_EXECUTOR_MEMORY=50G
 
 SPARK_DEFAULT_PARALLELISM=$(expr $SPARK_NUM_EXECUTORS '*' $SPARK_EXECUTOR_CORES '*' 2)
 
@@ -20,8 +20,9 @@ APP_JAR=target/oap-mllib-examples-1.0-SNAPSHOT-jar-with-dependencies.jar
 APP_CLASS=com.intel.hibench.sparkbench.ml.DenseKMeansDS
 
 K=200
-MAX_ITERATION=10
-INPUT_HDFS=hdfs://localhost:8020/HiBench/Kmeans/Input/samples
+INIT_MODE=Random
+MAX_ITERATION=20
+INPUT_HDFS=hdfs://sr235:8020/HiBench/Kmeans/Input/samples
 
 /usr/bin/time -p $SPARK_HOME/bin/spark-submit --master $SPARK_MASTER -v \
     --num-executors $SPARK_NUM_EXECUTORS \
@@ -33,5 +34,5 @@ INPUT_HDFS=hdfs://localhost:8020/HiBench/Kmeans/Input/samples
     --conf "spark.sql.shuffle.partitions=$SPARK_DEFAULT_PARALLELISM" \
     --class $APP_CLASS \
     $APP_JAR \
-    -k $K --numIterations $MAX_ITERATION $INPUT_HDFS \
+    -k $K --initMode $INIT_MODE --numIterations $MAX_ITERATION $INPUT_HDFS \
     2>&1 | tee KMeansHiBench-$SUFFIX-$(date +%m%d_%H_%M_%S).log
