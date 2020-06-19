@@ -24,10 +24,8 @@ import scala.collection.JavaConverters._
 import com.intel.oap.spark.sql.execution.datasources.v2.arrow.ArrowOptions
 import com.intel.sparkColumnarPlugin.vectorized.ArrowWritableColumnVector
 import org.apache.arrow.dataset.file.{FileSystem, SingleFileDatasetFactory}
-import org.apache.arrow.dataset.scanner.ScanTask
 import org.apache.arrow.memory.BaseAllocator
 import org.apache.arrow.vector.{FieldVector, VectorSchemaRoot}
-import org.apache.arrow.vector.types.pojo.ArrowType.ArrowTypeID
 import org.apache.arrow.vector.types.pojo.Schema
 import org.apache.hadoop.fs.FileStatus
 
@@ -84,14 +82,12 @@ object ArrowUtils {
     org.apache.spark.sql.util.ArrowUtils.toArrowSchema(t, TimeZone.getDefault.getID)
   }
 
-  def loadVectors(bundledVectors: ScanTask.ArrowBundledVectors, partitionValues: InternalRow,
-                  partitionSchema: StructType, dataSchema: StructType): ColumnarBatch = {
-    val rowCount: Int = getRowCount(bundledVectors)
-    val dataVectors = getDataVectors(bundledVectors, dataSchema)
-    val dictionaryVectors = getDictionaryVectors(bundledVectors, dataSchema)
+  def loadVsr(vsr: VectorSchemaRoot, partitionValues: InternalRow,
+              partitionSchema: StructType, dataSchema: StructType): ColumnarBatch = {
+    val fvs = getDataVectors(vsr, dataSchema)
 
-    val vectors = ArrowWritableColumnVector.loadColumns(rowCount, dataVectors.asJava,
-      dictionaryVectors.asJava)
+    val rowCount = vsr.getRowCount
+    val vectors = ArrowWritableColumnVector.loadColumns(rowCount, fvs.asJava)
     val partitionColumns = ArrowWritableColumnVector.allocateColumns(rowCount, partitionSchema)
     (0 until partitionColumns.length).foreach(i => {
       ColumnVectorUtils.populate(partitionColumns(i), partitionValues, i)
@@ -106,48 +102,17 @@ object ArrowUtils {
     org.apache.spark.sql.util.ArrowUtils.rootAllocator
   }
 
-  private def getRowCount(bundledVectors: ScanTask.ArrowBundledVectors) = {
-    val valueVectors = bundledVectors.valueVectors
-    val rowCount = valueVectors.getRowCount
-    rowCount
-  }
-
-  private def getDataVectors(bundledVectors: ScanTask.ArrowBundledVectors,
+  private def getDataVectors(vsr: VectorSchemaRoot,
                              dataSchema: StructType): List[FieldVector] = {
     // TODO Deprecate following (bad performance maybe brought).
     // TODO Assert vsr strictly matches dataSchema instead.
-    val valueVectors = bundledVectors.valueVectors
     dataSchema.map(f => {
-      val vector = valueVectors.getVector(f.name)
+      val vector = vsr.getVector(f.name)
       if (vector == null) {
         throw new IllegalStateException("Error: no vector named " + f.name + " in record bach")
       }
       vector
     }).toList
-  }
-
-  private def getDictionaryVectors(bundledVectors: ScanTask.ArrowBundledVectors,
-                                   dataSchema: StructType): List[FieldVector] = {
-    val valueVectors = bundledVectors.valueVectors
-    val dictionaryVectorMap = bundledVectors.dictionaryVectors
-
-    val fieldNameToDictionaryEncoding = valueVectors.getSchema.getFields.asScala.map(f => {
-      f.getName -> f.getDictionary
-    }).toMap
-
-    val dictionaryVectorsWithNulls = dataSchema.map(f => {
-      val de = fieldNameToDictionaryEncoding(f.name)
-
-      Option(de) match {
-        case None => null
-        case _ =>
-          if (de.getIndexType.getTypeID != ArrowTypeID.Int) {
-            throw new IllegalArgumentException("Wrong index type: " + de.getIndexType)
-          }
-          dictionaryVectorMap.get(de.getId).getVector
-      }
-    }).toList
-    dictionaryVectorsWithNulls
   }
 
   private def getFormat(
