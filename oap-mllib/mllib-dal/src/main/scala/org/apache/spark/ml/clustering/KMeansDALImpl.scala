@@ -42,6 +42,7 @@ class KMeansDALImpl (
     instr.foreach(_.logInfo(s"Processing partitions with $executorNum executors"))
 
     val partitionDims = Utils.getPartitionDims(data)
+    val executorIPAddress = Utils.sparkFirstExecutorIP(data.sparkContext)
 
     val results = data.mapPartitionsWithIndex { (index: Int, it: Iterator[Vector]) =>
 
@@ -83,7 +84,7 @@ class KMeansDALImpl (
 
 //      Service.printNumericTable("10 rows of local input data", localData, 10)
 
-      OneCCL.init(executorNum)
+      OneCCL.init(executorNum, executorIPAddress, OneCCL.KVS_PORT)
 
       val initCentroids = OneDAL.makeNumericTable(centers)
       var result = new KMeansResult()
@@ -142,7 +143,10 @@ class KMeansDALImpl (
 
     val results = data.mapPartitions { p =>
 
-      OneCCL.init(executorNum)
+//      OneCCL.init(executorNum)
+
+    OneCCL.init(executorNum, "10.0.0.138", OneCCL.KVS_PORT)
+
       // Set number of thread to use for each dal process, TODO: set through config
 //      OneDAL.setNumberOfThread(1)
 

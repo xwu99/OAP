@@ -35,8 +35,8 @@ fi
 
 SPARK_MASTER=yarn
 SPARK_DRIVER_MEMORY=1G
-SPARK_NUM_EXECUTORS=2
-SPARK_EXECUTOR_CORES=1
+SPARK_NUM_EXECUTORS=3
+SPARK_EXECUTOR_CORES=2
 SPARK_EXECUTOR_MEMORY=2G
 
 SPARK_DEFAULT_PARALLELISM=$(expr $SPARK_NUM_EXECUTORS '*' $SPARK_EXECUTOR_CORES '*' 2)
@@ -59,13 +59,19 @@ SPARK_DRIVER_CLASSPATH=$OAP_MLLIB_JAR:$DAAL_JAR
 SPARK_EXECUTOR_CLASSPATH=./oap-mllib-1.0-SNAPSHOT-jar-with-dependencies.jar:./daal.jar
 
 # Set IP Port to one of the executors
-CCL_KVS_IP_PORT=10.0.0.138_3000
+CCL_KVS_IP_PORT=10.0.0.138_51234
 
 APP_PY=kmeans-pyspark.py
 
 # Data file is from Spark Examples (data/mllib/sample_kmeans_data.txt), the data file should be copied to HDFS
 # DATA_FILE=data/sample_kmeans_data.txt
 DATA_FILE=data/a1a
+
+    # --conf "spark.executorEnv.CCL_ATL_TRANSPORT=ofi" \
+    # --conf "spark.executorEnv.CCL_PM_TYPE=resizable" \
+    # --conf "spark.executorEnv.CCL_KVS_IP_EXCHANGE=env" \
+    # --conf "spark.executorEnv.CCL_KVS_IP_PORT=$CCL_KVS_IP_PORT" \
+    # --conf "spark.executorEnv.CCL_WORLD_SIZE=$SPARK_NUM_EXECUTORS" \
 
 /usr/bin/time -p $SPARK_HOME/bin/spark-submit --master $SPARK_MASTER -v \
     --num-executors $SPARK_NUM_EXECUTORS \
@@ -75,11 +81,8 @@ DATA_FILE=data/a1a
     --conf "spark.serializer=org.apache.spark.serializer.KryoSerializer" \
     --conf "spark.default.parallelism=$SPARK_DEFAULT_PARALLELISM" \
     --conf "spark.sql.shuffle.partitions=$SPARK_DEFAULT_PARALLELISM" \
-    --conf "spark.executorEnv.CCL_ATL_TRANSPORT=ofi" \
-    --conf "spark.executorEnv.CCL_PM_TYPE=resizable" \
-    --conf "spark.executorEnv.CCL_KVS_IP_EXCHANGE=env" \
     --conf "spark.executorEnv.CCL_KVS_IP_PORT=$CCL_KVS_IP_PORT" \
-    --conf "spark.executorEnv.CCL_WORLD_SIZE=$SPARK_NUM_EXECUTORS" \
+    --conf "spark.shuffle.reduceLocality.enabled=false" \
     --conf "spark.driver.extraClassPath=$SPARK_DRIVER_CLASSPATH" \
     --conf "spark.executor.extraClassPath=$SPARK_EXECUTOR_CLASSPATH" \
     --files $SPARK_FILES \

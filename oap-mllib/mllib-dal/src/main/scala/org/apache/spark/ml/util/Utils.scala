@@ -1,6 +1,8 @@
 package org.apache.spark.ml.util
 
-import org.apache.spark.SparkConf
+import java.net.InetAddress
+
+import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.ml.linalg.Vector
 
@@ -52,5 +54,13 @@ object Utils {
     val executorCores = conf.getInt("spark.executor.cores", 1)
 
     executorCores
+  }
+
+  def sparkFirstExecutorIP(sc: SparkContext): String = {
+    val info = sc.statusTracker.getExecutorInfos
+    // get first executor, info(0) is driver
+    val host = info(1).host()
+    val ip = InetAddress.getByName(host).getHostAddress
+    ip
   }
 }

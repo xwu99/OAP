@@ -148,4 +148,3 @@ JNIEXPORT jint JNICALL Java_org_apache_spark_ml_util_OneCCL_00024_setEnv
 
     return err;
 }
-
