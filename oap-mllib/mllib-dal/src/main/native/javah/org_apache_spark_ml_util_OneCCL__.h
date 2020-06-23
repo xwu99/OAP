@@ -39,6 +39,14 @@ JNIEXPORT jboolean JNICALL Java_org_apache_spark_ml_util_OneCCL_00024_isRoot
 JNIEXPORT jint JNICALL Java_org_apache_spark_ml_util_OneCCL_00024_rankID
   (JNIEnv *, jobject);
 
+/*
+ * Class:     org_apache_spark_ml_util_OneCCL__
+ * Method:    setEnv
+ * Signature: (Ljava/lang/String;Ljava/lang/String;Z)I
+ */
+JNIEXPORT jint JNICALL Java_org_apache_spark_ml_util_OneCCL_00024_setEnv
+  (JNIEnv *, jobject, jstring, jstring, jboolean);
+
 #ifdef __cplusplus
 }
 #endif

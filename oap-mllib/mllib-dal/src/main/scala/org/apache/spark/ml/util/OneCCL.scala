@@ -58,6 +58,24 @@ object OneCCL {
   }
 
   // Run on Executor
+  def setExecutorEnv(executor_num: Int, ip: String, port: Int): Unit = {
+    val ccl_root_path = "./lib/oneccl"
+
+    setEnv("CCL_PM_TYPE", "resizable")
+    setEnv("CCL_ATL_TRANSPORT","ofi")
+    setEnv("CCL_KVS_IP_EXCHANGE","env")
+    setEnv("CCL_KVS_IP_PORT", s"${ip}_${port}")
+    setEnv("CCL_WORLD_SIZE", s"${executor_num}")
+    setEnv("I_MPI_ROOT", ccl_root_path)
+    setEnv("CCL_ATL_TRANSPORT_PATH", s"$ccl_root_path/lib")
+    setEnv("FI_PROVIDER_PATH",s"$ccl_root_path/lib/prov")
+  }
+
+  def initWithIPPort(executor_num: Int, ip: String, port: Int) = {
+    setExecutorEnv(executor_num, ip, port)
+    init(executor_num)
+  }
+
   def init(executor_num: Int)= {
     checkEnv()
 
@@ -83,4 +101,6 @@ object OneCCL {
 
   @native def isRoot() : Boolean
   @native def rankID() : Int
+
+  @native def setEnv(key: String, value: String, overwrite: Boolean = true): Int
 }

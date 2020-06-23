@@ -129,3 +129,23 @@ JNIEXPORT jint JNICALL Java_org_apache_spark_ml_util_OneCCL_00024_rankID
     return rank_id;
 
 }
+
+/*
+ * Class:     org_apache_spark_ml_util_OneCCL__
+ * Method:    setEnv
+ * Signature: (Ljava/lang/String;Ljava/lang/String;Z)I
+ */
+JNIEXPORT jint JNICALL Java_org_apache_spark_ml_util_OneCCL_00024_setEnv
+  (JNIEnv *env , jobject obj, jstring key, jstring value, jboolean overwrite) {
+
+    char* k = (char *) env->GetStringUTFChars(key, NULL);
+    char* v = (char *) env->GetStringUTFChars(value, NULL);
+
+    int err = setenv(k, v, overwrite);
+
+    env->ReleaseStringUTFChars(key, k);
+    env->ReleaseStringUTFChars(value, v);
+
+    return err;
+}
+
