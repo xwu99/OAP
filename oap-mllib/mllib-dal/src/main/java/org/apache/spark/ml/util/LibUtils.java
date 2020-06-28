@@ -7,7 +7,9 @@ import java.util.logging.Logger;
 
 public final class LibUtils {
     private static final String LIBRARY_PATH_IN_JAR = "/lib";
-    private final static String MLLIB_DAL_LIB      = "MLlibDAL";
+    private final static String MLLIB_DAL_LIB       = "MLlibDAL";
+    private final static String TBBLIB              = "tbb";
+    private final static String TBBMALLOCLIB        = "tbbmalloc";
 
     private final static String subDir = "MLlibDAL_" + new Date().getTime();
 
@@ -15,11 +17,13 @@ public final class LibUtils {
     private static final Level logLevel = Level.FINE;
 
     /**
-     * Load MLlibDAL lib
+     * Load MLlibDAL lib and TBB libs (TBB is only available as dynamic lib)
      */
     public static void loadLibrary()
     {
         try {
+            loadFromJar(subDir, TBBLIB);
+            loadFromJar(subDir, TBBMALLOCLIB);
             loadFromJar(subDir, MLLIB_DAL_LIB);
             return;
         }

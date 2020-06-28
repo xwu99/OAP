@@ -31,5 +31,13 @@
                 <include>*.so</include>
             </includes>
         </fileSet>
+        <fileSet>
+            <directory>${env.TBBROOT}/lib/intel64/gcc4.8</directory>
+            <outputDirectory>lib</outputDirectory>
+            <includes>
+                <include>libtbb.so*</include>
+                <include>libtbbmalloc.so*</include>
+            </includes>
+        </fileSet>
     </fileSets>
 </assembly>

@@ -12,8 +12,9 @@ INCS := -I $(JAVA_HOME)/include \
         -I ./javah \
         -I ./
 
-LIBS := -L$(CCL_ROOT)/lib -lccl \
-        -L$(DAALROOT)/lib/intel64 -ldaal_core -ldaal_thread \
+# Use static link if possible, TBB is only available as dynamic libs
+LIBS := -L$(CCL_ROOT)/lib -l:libccl.a \
+        -L$(DAALROOT)/lib/intel64 -l:libdaal_core.a -l:libdaal_thread.a \
         -L$(TBBROOT)/lib -ltbb -ltbbmalloc
 
 CPP_SRCS += \
