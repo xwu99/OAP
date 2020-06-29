@@ -2,7 +2,7 @@
 
 ## Overview
 
-OAP MLlib is an optimized package to accelerate machine learning algorithms in  [Apache Spark MLlib](https://spark.apache.org/mllib).  It is compatible with Spark MLlib and leverages [Intel® oneAPI Data Analytics Library (oneDAL)](https://github.com/oneapi-src/oneDAL)  to provide highly optimized algorithms and get most out of CPU and GPU capabilities. It also take advantage of [Intel® oneAPI Collective Communications Library (oneCCL)](https://github.com/oneapi-src/oneCCL) to provide efficient communication patterns in multi-node multi-GPU cluster.
+OAP MLlib is an optimized package to accelerate machine learning algorithms in  [Apache Spark MLlib](https://spark.apache.org/mllib).  It is compatible with Spark MLlib and leverages [Intel® oneAPI Data Analytics Library (oneDAL)](https://github.com/oneapi-src/oneDAL)  to provide highly optimized algorithms and get most out of CPU and GPU capabilities. It also take advantage of [Intel® oneAPI Collective Communications Library (oneCCL)](https://github.com/oneapi-src/oneCCL) to provide efficient communication patterns in multi-node multi-GPU clusters.
 
 ## Compatibility
 
@@ -49,9 +49,7 @@ As PySpark-based applications call their Scala couterparts, they shall be suppor
 
 ### Prerequisites
 
-We use [Apache Maven](https://maven.apache.org/) to manage and build source code.  
-
-The following tools and libraries are needed to build OAP MLlib:
+We use [Apache Maven](https://maven.apache.org/) to manage and build source code.  The following tools and libraries are also needed to build OAP MLlib:
 
 * JDK 8.0+
 * Apache Maven 3.6.2+
@@ -66,13 +64,26 @@ Scala and Java dependency descriptions are already included in Maven POM file.
 
 ### Build
 
-To clone source code and build, run the following commands:
+To clone and checkout source code, run the following commands:
 ```
     $ git clone https://github.com/Intel-bigdata/OAP
     $ git checkout -b origin/branch-intelmllib-spark-3.0.0
-    $ cd OAP/oap-mllib
-    $ ./build.sh    
 ```
+After installed the above Prerequisites, please make sure the following environment variables are set for building:
+
+Environment | Description
+------------| -----------
+JAVA_HOME   | Path to JDK home directory
+DAALROOT    | Path to oneDAL home directory
+TBB_ROOT    | Path to oneTBB home directory
+CCL_ROOT    | Path to oneCCL home directory
+
+To build, run the following commands: 
+```
+    $ cd OAP/oap-mllib
+    $ ./build.sh
+```
+
 The result jar package will be placed in `target` directory.
 
 ## Examples
