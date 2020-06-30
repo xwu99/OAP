@@ -2,11 +2,11 @@
 
 ## Overview
 
-OAP MLlib is an optimized package to accelerate machine learning algorithms in  [Apache Spark MLlib](https://spark.apache.org/mllib).  It is compatible with Spark MLlib and leverages [Intel® oneAPI Data Analytics Library (oneDAL)](https://github.com/oneapi-src/oneDAL)  to provide highly optimized algorithms and get most out of CPU and GPU capabilities. It also take advantage of [Intel® oneAPI Collective Communications Library (oneCCL)](https://github.com/oneapi-src/oneCCL) to provide efficient communication patterns in multi-node multi-GPU clusters.
+OAP MLlib is an optimized package to accelerate machine learning algorithms in  [Apache Spark MLlib](https://spark.apache.org/mllib).  It is compatible with Spark MLlib and leverages open source [Intel® oneAPI Data Analytics Library (oneDAL)](https://github.com/oneapi-src/oneDAL)  to provide highly optimized algorithms and get most out of CPU and GPU capabilities. It also take advantage of open source [Intel® oneAPI Collective Communications Library (oneCCL)](https://github.com/oneapi-src/oneCCL) to provide efficient communication patterns in multi-node multi-GPU clusters.
 
 ## Compatibility
 
-OAP MLlib tried to maintain the same API interfaces and produce same results that are identical with Spark MLlib. However due to the nature of float point operation, there may be some small deviation from the original result, we will try our best to make sure the error is within acceptable range.
+OAP MLlib tried to maintain the same API interfaces and produce same results that are identical with Spark MLlib. However due to the nature of float point operations, there may be some small deviation from the original result, we will try our best to make sure the error is within acceptable range.
 For those algorithms that are not accelerated by OAP MLlib, the original Spark MLlib one will be used. 
 
 ## Getting Started
@@ -25,10 +25,21 @@ You can also build the package from source code, please refer to [Building](#Bui
 * Java 8.0+
 * Apache Spark 3.0.0+
 
-### Sanity Check
-You need to change related variables in `run.sh` and run the following commands:
+We only verified on CentOS as host OS, running on other Linux distributions should be straightforward.
+
+### Spark Configuration
+
+Since all dependencies are packaged into jar, you only need to set extra class path for Spark to point to this jar and `spark-submit` script will take care of the rest. 
 ```
-    $ cd OAP/oap-mllib/example/kmeans
+spark.driver.extraClassPath=/path/to/oap-mllib-jar
+spark.executor.extraClassPath=/path/to/oap-mllib-jar
+```
+
+### Sanity Check
+
+To use K-means example for sanity check, you need to upload a data file to your HDFS and change related variables in `run.sh` of kmeans example. Then run the following commands:
+```
+    $ cd OAP/oap-mllib/examples/kmeans
     $ ./build.sh
     $ ./run.sh
 ```
@@ -36,7 +47,7 @@ You need to change related variables in `run.sh` and run the following commands:
 ### Benchmark with HiBench
 Use HiBench to generate dataset with various profiles, and change related variables in `run-XXX.sh` script when applicable.  Then run the following commands:
 ```
-    $ cd OAP/oap-mllib/example/kmeans-hibench
+    $ cd OAP/oap-mllib/examples/kmeans-hibench
     $ ./build.sh
     $ ./run-hibench-oap-mllib.sh
 ```
@@ -58,7 +69,7 @@ We use [Apache Maven](https://maven.apache.org/) to manage and build source code
 * Intel® oneAPI Threading Building Blocks 2021.1-beta06+
 * Intel® oneAPI Collective Communications Library 2021.1-beta06+
 
-Intel® oneAPI Toolkits (Beta) and its components can be downloaded from [here](https://software.intel.com/content/www/us/en/develop/tools/oneapi.html).
+Intel® oneAPI Toolkits (Beta) and its components can be downloaded and install from [here](https://software.intel.com/content/www/us/en/develop/tools/oneapi.html). Installation process for oneAPI using Package Managers (YUM (DNF), APT, and ZYPPER) is also available from [here](https://software.intel.com/content/www/us/en/develop/articles/oneapi-repo-instructions.html). Generally you only need to install oneAPI Base Toolkit for Linux. 
 
 Scala and Java dependency descriptions are already included in Maven POM file. 
 
@@ -67,8 +78,10 @@ Scala and Java dependency descriptions are already included in Maven POM file.
 To clone and checkout source code, run the following commands:
 ```
     $ git clone https://github.com/Intel-bigdata/OAP
-    $ git checkout -b origin/branch-intelmllib-spark-3.0.0
+    $ git checkout -b branch-intelmllib-spark-3.0.0 origin/branch-intelmllib-spark-3.0.0
 ```
+
+We rely on `JAVA_HOME` and oneAPI environments to find required toolchains and libraries. 
 After installed the above Prerequisites, please make sure the following environment variables are set for building:
 
 Environment | Description
@@ -78,13 +91,15 @@ DAALROOT    | Path to oneDAL home directory
 TBB_ROOT    | Path to oneTBB home directory
 CCL_ROOT    | Path to oneCCL home directory
 
+`DAALROOT`, `TBB_ROOT`, `CCL_ROOT` can be set by oneAPI Toolkits with `/opt/intel/inteloneapi/setvars.sh` script. If you would like to buid your own oneDAL, oneTBB or oneCCL, you can manually set the paths accordingly.
+
 To build, run the following commands: 
 ```
     $ cd OAP/oap-mllib
     $ ./build.sh
 ```
 
-The result jar package will be placed in `target` directory.
+The built jar package will be placed in `target` directory.
 
 ## Examples
 
