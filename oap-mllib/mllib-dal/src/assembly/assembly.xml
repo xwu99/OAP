@@ -13,6 +13,12 @@
             <unpack>true</unpack>
             <scope>runtime</scope>
         </dependencySet>
+        <!-- Include local oneDAL jar-->
+        <dependencySet>
+            <outputDirectory>/</outputDirectory>
+            <unpack>true</unpack>
+            <scope>system</scope>
+        </dependencySet>
     </dependencySets>
     <fileSets>
         <fileSet>
@@ -29,6 +35,13 @@
             <outputDirectory>lib</outputDirectory>
             <includes>
                 <include>*.so</include>
+            </includes>
+        </fileSet>
+        <fileSet>
+            <directory>${env.DAALROOT}/lib/intel64</directory>
+            <outputDirectory>lib</outputDirectory>
+            <includes>
+                <include>libJavaAPI.so</include>
             </includes>
         </fileSet>
         <fileSet>

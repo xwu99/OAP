@@ -154,7 +154,7 @@
                 <configuration>
                     <appendAssemblyId>true</appendAssemblyId>
                     <descriptors>
-                        <!-- use customized assembly to include *.so -->
+                        <!-- use customized assembly -->
                         <descriptor>src/assembly/assembly.xml</descriptor>
                     </descriptors>
                 </configuration>
