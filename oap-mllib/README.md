@@ -1,13 +1,13 @@
-# OAP MLlib
+# Intel MLlib
 
 ## Overview
 
-OAP MLlib is an optimized package to accelerate machine learning algorithms in  [Apache Spark MLlib](https://spark.apache.org/mllib).  It is compatible with Spark MLlib and leverages open source [Intel® oneAPI Data Analytics Library (oneDAL)](https://github.com/oneapi-src/oneDAL)  to provide highly optimized algorithms and get most out of CPU and GPU capabilities. It also take advantage of open source [Intel® oneAPI Collective Communications Library (oneCCL)](https://github.com/oneapi-src/oneCCL) to provide efficient communication patterns in multi-node multi-GPU clusters.
+Intel MLlib is an optimized package to accelerate machine learning algorithms in  [Apache Spark MLlib](https://spark.apache.org/mllib).  It is compatible with Spark MLlib and leverages open source [Intel® oneAPI Data Analytics Library (oneDAL)](https://github.com/oneapi-src/oneDAL)  to provide highly optimized algorithms and get most out of CPU and GPU capabilities. It also take advantage of open source [Intel® oneAPI Collective Communications Library (oneCCL)](https://github.com/oneapi-src/oneCCL) to provide efficient communication patterns in multi-node multi-GPU clusters.
 
 ## Compatibility
 
-OAP MLlib tried to maintain the same API interfaces and produce same results that are identical with Spark MLlib. However due to the nature of float point operations, there may be some small deviation from the original result, we will try our best to make sure the error is within acceptable range.
-For those algorithms that are not accelerated by OAP MLlib, the original Spark MLlib one will be used. 
+Intel MLlib tried to maintain the same API interfaces and produce same results that are identical with Spark MLlib. However due to the nature of float point operations, there may be some small deviation from the original result, we will try our best to make sure the error is within acceptable range.
+For those algorithms that are not accelerated by Intel MLlib, the original Spark MLlib one will be used. 
 
 ## Getting Started
 
@@ -60,7 +60,7 @@ As PySpark-based applications call their Scala couterparts, they shall be suppor
 
 ### Prerequisites
 
-We use [Apache Maven](https://maven.apache.org/) to manage and build source code.  The following tools and libraries are also needed to build OAP MLlib:
+We use [Apache Maven](https://maven.apache.org/) to manage and build source code.  The following tools and libraries are also needed to build Intel MLlib:
 
 * JDK 8.0+
 * Apache Maven 3.6.2+
