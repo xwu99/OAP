@@ -52,8 +52,8 @@ if [[ -z $TBBROOT ]]; then
     exit 1
 fi
 
-if [[ -z $CCLROOT ]]; then
-    echo CCLROOT not defined!
+if [[ -z $CCL_ROOT ]]; then
+    echo CCL_ROOT not defined!
     exit 1
 fi
 
