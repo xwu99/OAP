@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 
-# for log suffix
-SUFFIX=$( basename -s .sh "${BASH_SOURCE[0]}" )
+# == User to customize the following environments ======= #
 
-export SPARK_HOME=/home/xiaochang/opt/spark-3.0.0-preview-bin-hadoop2.7
-export HADOOP_HOME=/home/xiaochang/opt/hadoop-2.7.3
-export HADOOP_CONF_DIR=$HADOOP_HOME/etc/hadoop
+# Set user Spark and Hadoop home directory
+export SPARK_HOME=/path/to/your/spark/home
+export HADOOP_HOME=/path/to/your/hadoop/home
+# Set user HDFS Root
+export HDFS_ROOT=hdfs://your_hostname:8020
+
+# == User to customize Spark executor cores and memory == #
 
 SPARK_MASTER=yarn
 SPARK_DRIVER_MEMORY=8G
@@ -16,13 +19,20 @@ SPARK_EXECUTOR_MEMORY=50G
 
 SPARK_DEFAULT_PARALLELISM=$(expr $SPARK_NUM_EXECUTORS '*' $SPARK_EXECUTOR_CORES '*' 2)
 
-APP_JAR=target/oap-mllib-examples-1.0-SNAPSHOT-jar-with-dependencies.jar
+# ======================================================= #
+
+# for log suffix
+SUFFIX=$( basename -s .sh "${BASH_SOURCE[0]}" )
+
+export HADOOP_CONF_DIR=$HADOOP_HOME/etc/hadoop
+
+APP_JAR=target/oap-mllib-examples-0.9.0-with-spark-3.0.0.jar
 APP_CLASS=com.intel.hibench.sparkbench.ml.DenseKMeansDS
 
 K=200
 INIT_MODE=Random
 MAX_ITERATION=20
-INPUT_HDFS=hdfs://sr235:8020/HiBench/Kmeans/Input/samples
+INPUT_HDFS=$HDFS_ROOT/HiBench/Kmeans/Input/samples
 
 /usr/bin/time -p $SPARK_HOME/bin/spark-submit --master $SPARK_MASTER -v \
     --num-executors $SPARK_NUM_EXECUTORS \
