@@ -18,7 +18,7 @@
 package org.apache.spark.ml.clustering
 
 import com.intel.daal.algorithms.KMeansResult
-import com.intel.daal.data_management.data.{HomogenNumericTable, NumericTable, Matrix => DALMatrix}
+import com.intel.daal.data_management.data.{NumericTable, Matrix => DALMatrix}
 import com.intel.daal.services.DaalContext
 import org.apache.spark.ml.util._
 import org.apache.spark.mllib.clustering.{DistanceMeasure, KMeansModel => MLlibKMeansModel}
@@ -46,59 +46,50 @@ class KMeansDALImpl (
 
     val results = data.mapPartitionsWithIndex { (index: Int, it: Iterator[Vector]) =>
 
-      // Set number of thread to use for each dal process, TODO: set through config
-      //      OneDAL.setNumberOfThread(1)
+    val numRows = partitionDims(index)._1
+    val numCols = partitionDims(index)._2
 
-      // Assume each partition of RDD[HomogenNumericTable] has only one NumericTable
-//      val localData = p.next()
+    println(s"KMeansDALImpl: Partition index: $index, numCols: $numCols, numRows: $numRows")
+    println("KMeansDALImpl: Loading libMLlibDAL.so" )
 
+    // extract libMLlibDAL.so to temp file and load
+    LibUtils.loadLibrary()
 
-//      val arrayData = it.toArray
-      val numRows = partitionDims(index)._1
-      val numCols = partitionDims(index)._2
+    // Build DALMatrix
+    val context = new DaalContext()
+    val localData = new DALMatrix(context, classOf[java.lang.Double],
+      numCols.toLong, numRows.toLong, NumericTable.AllocationFlag.DoAllocate)
 
-      println(s"KMeansDALImpl: Partition index: $index, numCols: $numCols, numRows: $numRows")
-      println("KMeansDALImpl: Loading libMLlibDAL.so" )
-      // extract libMLlibDAL.so to temp file and load
-      LibUtils.loadLibrary()
+    println(s"KMeansDALImpl: Start data conversion")
 
-      // Build DALMatrix
-      val context = new DaalContext()
-      val localData = new DALMatrix(context, classOf[java.lang.Double],
-        numCols.toLong, numRows.toLong, NumericTable.AllocationFlag.DoAllocate)
+    val start = System.nanoTime
+    it.zipWithIndex.foreach {
+      case (v, rowIndex) =>
+        for (colIndex <- 0 until numCols)
+          // TODO: Add matrix.set API in DAL to replace this
+          // matrix.set(rowIndex, colIndex, row.getString(colIndex).toDouble)
+          setNumericTableValue(localData.getCNumericTable, rowIndex, colIndex, v(colIndex))
+    }
 
-      println(s"KMeansDALImpl: Start data conversion")
+    val duration = (System.nanoTime - start) / 1E9
 
-      val start = System.nanoTime
-      it.zipWithIndex.foreach {
-        case (v, rowIndex) =>
-          for (colIndex <- 0 until numCols)
-            // TODO: Add matrix.set API in DAL to replace this
-            // matrix.set(rowIndex, colIndex, row.getString(colIndex).toDouble)
-            setNumericTableValue(localData.getCNumericTable, rowIndex, colIndex, v(colIndex))
-      }
+    println(s"KMeansDALImpl: Data conversion takes $duration seconds")
 
-      val duration = (System.nanoTime - start) / 1E9
+    OneCCL.init(executorNum, executorIPAddress, OneCCL.KVS_PORT)
 
-      println(s"KMeansDALImpl: Data conversion takes $duration seconds")
+    val initCentroids = OneDAL.makeNumericTable(centers)
+    var result = new KMeansResult()
+    val cCentroids = cKMeansDALComputeWithInitCenters(
+      localData.getCNumericTable,
+      initCentroids.getCNumericTable,
+      nClusters,
+      maxIterations,
+      executorNum,
+      executorCores,
+      result
+    )
 
-//      Service.printNumericTable("10 rows of local input data", localData, 10)
-
-      OneCCL.init(executorNum, executorIPAddress, OneCCL.KVS_PORT)
-
-      val initCentroids = OneDAL.makeNumericTable(centers)
-      var result = new KMeansResult()
-      val cCentroids = cKMeansDALComputeWithInitCenters(
-        localData.getCNumericTable,
-        initCentroids.getCNumericTable,
-        nClusters,
-        maxIterations,
-        executorNum,
-        executorCores,
-        result
-      )
-
-      val ret = if (OneCCL.isRoot()) {
+    val ret = if (OneCCL.isRoot()) {
         assert(cCentroids != 0)
 
         val centerVectors = OneDAL.numericTableToVectors(OneDAL.makeNumericTable(cCentroids))
@@ -119,16 +110,10 @@ class KMeansDALImpl (
     val centerVectors = results(0)._1
     val totalCost = results(0)._2
 
-    //    printNumericTable(centers)
-
-    //    Service.printNumericTable("centers", centers)
-
     instr.foreach(_.logInfo(s"OneDAL output centroids:\n${centerVectors.mkString("\n")}"))
 
     // TODO: tolerance support in DAL
     val iteration = maxIterations
-
-    //    val centerVectors = OneDAL.numericTableToVectors(centers)
 
     val parentModel = new MLlibKMeansModel(
       centerVectors.map(OldVectors.fromML(_)),
@@ -136,81 +121,6 @@ class KMeansDALImpl (
 
     parentModel
   }
-
-  def run(data: RDD[HomogenNumericTable], instr: Option[Instrumentation]) : MLlibKMeansModel = {
-
-    instr.foreach(_.logInfo(s"Processing partitions with $executorNum executors"))
-
-    val results = data.mapPartitions { p =>
-
-//      OneCCL.init(executorNum)
-
-    OneCCL.init(executorNum, "10.0.0.138", OneCCL.KVS_PORT)
-
-      // Set number of thread to use for each dal process, TODO: set through config
-//      OneDAL.setNumberOfThread(1)
-
-      // Assume each partition of RDD[HomogenNumericTable] has only one NumericTable
-      val localData = p.next()
-
-      val context = new DaalContext()
-      localData.unpack(context)
-
-      val initCentroids = OneDAL.makeNumericTable(centers)
-
-      var result = new KMeansResult()
-      val cCentroids = cKMeansDALComputeWithInitCenters(
-        localData.getCNumericTable,
-        initCentroids.getCNumericTable,
-        nClusters,
-        maxIterations,
-        executorNum,
-        executorCores,
-        result
-      )
-
-      val ret = if (OneCCL.isRoot()) {
-        assert(cCentroids != 0)
-
-        val centerVectors = OneDAL.numericTableToVectors(OneDAL.makeNumericTable(cCentroids))
-        Iterator((centerVectors, result.totalCost))
-      } else {
-        Iterator.empty
-      }
-
-      OneCCL.cleanup()
-
-      ret
-
-    }.collect()
-
-    // Make sure there is only one result from rank 0
-    assert(results.length == 1)
-
-    val centerVectors = results(0)._1
-    val totalCost = results(0)._2
-
-//    printNumericTable(centers)
-
-//    Service.printNumericTable("centers", centers)
-
-    instr.foreach(_.logInfo(s"OneDAL output centroids:\n${centerVectors.mkString("\n")}"))
-
-    // TODO: tolerance support in DAL
-    val iteration = maxIterations
-
-//    val centerVectors = OneDAL.numericTableToVectors(centers)
-
-    val parentModel = new MLlibKMeansModel(
-      centerVectors.map(OldVectors.fromML(_)),
-      distanceMeasure, totalCost, iteration)
-
-    parentModel
-  }
-
-  // Single entry to call KMeans DAL backend, output HomogenNumericTable representing centers
-//  @native private def cKMeansDALCompute(data: Long, block_num: Int,
-//                                        cluster_num: Int, iteration_num: Int) : Long
 
   // Single entry to call KMeans DAL backend with initial centers, output centers
   @native private def cKMeansDALComputeWithInitCenters(data: Long, centers: Long,
