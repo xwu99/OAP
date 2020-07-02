@@ -11,7 +11,7 @@ For those algorithms that are not accelerated by Intel MLlib, the original Spark
 
 ## Getting Started
 
-You can use a pre-built package to get started, it can be downloaded from [here](https://github.com/Intel-bigdata/OAP/releases/download/v0.9.0-spark-3.0.0/oap-mllib-0.9.0-with-spark-3.0.0.jar) .
+You can use a pre-built package to get started, it can be downloaded from [here](https://github.com/Intel-bigdata/OAP/releases/download/v0.9.0-spark-3.0.0/oap-mllib-0.9.0-with-spark-3.0.0.jar).
 
 After downloaded, you can refer to the following [Running](#Running) section to try out.
 
@@ -30,6 +30,8 @@ You can also build the package from source code, please refer to [Building](#Bui
     - Collective Communications Library (oneCCL)
 
 Generally, our common system requirements are the same with Intel® oneAPI Toolkit, please refer to [here](https://software.intel.com/content/www/us/en/develop/articles/intel-oneapi-base-toolkit-system-requirements.html) for details.
+
+Intel® oneAPI Toolkits (Beta) and its components can be downloaded and install from [here](https://software.intel.com/content/www/us/en/develop/tools/oneapi.html). Installation process for oneAPI using Package Managers (YUM (DNF), APT, and ZYPPER) is also available from [here](https://software.intel.com/content/www/us/en/develop/articles/oneapi-repo-instructions.html). Generally you only need to install oneAPI Base Toolkit for Linux. 
 
 We suggest you to add oneAPI Toolkits' `setvars.sh` script to shell startup script in all nodes so that the oneAPI library dependencies will be automatically resolved. Add the following line in `~/.bashrc`:
 ```
@@ -74,11 +76,12 @@ We use [Apache Maven](https://maven.apache.org/) to manage and build source code
 * JDK 8.0+
 * Apache Maven 3.6.2+
 * GNU GCC 4.8.5+
-* Intel® oneAPI Data Analytics Library 2021.1-beta06+
-* Intel® oneAPI Threading Building Blocks 2021.1-beta06+
-* Intel® oneAPI Collective Communications Library 2021.1-beta06+
+* Intel® oneAPI Toolkits (Beta) 2021.1-beta06+ Components: 
+    - Data Analytics Library (oneDAL)
+    - Threading Building Blocks (oneTBB)
+    - Collective Communications Library (oneCCL)
 
-Intel® oneAPI Toolkits (Beta) and its components can be downloaded and install from [here](https://software.intel.com/content/www/us/en/develop/tools/oneapi.html). Installation process for oneAPI using Package Managers (YUM (DNF), APT, and ZYPPER) is also available from [here](https://software.intel.com/content/www/us/en/develop/articles/oneapi-repo-instructions.html). Generally you only need to install oneAPI Base Toolkit for Linux. 
+Please refer to the [Running](#Running) section for how to install oneAPI Toolkits. More details abount oneAPI can be found [here](https://software.intel.com/content/www/us/en/develop/tools/oneapi.html).
 
 Scala and Java dependency descriptions are already included in Maven POM file. 
 
