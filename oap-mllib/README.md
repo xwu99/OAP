@@ -11,7 +11,7 @@ For those algorithms that are not accelerated by Intel MLlib, the original Spark
 
 ## Getting Started
 
-You can use a pre-built package to get started, it can be downloaded from: [XXX]() .
+You can use a pre-built package to get started, it can be downloaded from [here](https://github.com/Intel-bigdata/OAP/releases/download/v0.9.0-spark-3.0.0/oap-mllib-0.9.0-with-spark-3.0.0.jar) .
 
 After downloaded, you can refer to the following [Running](#Running) section to try out.
 
@@ -21,15 +21,24 @@ You can also build the package from source code, please refer to [Building](#Bui
 
 ### Prerequisites
 
-* CentOS 7.0+
+* CentOS 7.0+, Ubuntu 18.04 LTS+
 * Java 8.0+
 * Apache Spark 3.0.0+
+* Intel® oneAPI Toolkits (Beta) 2021.1-beta06+ Components: 
+    - Data Analytics Library (oneDAL)
+    - Threading Building Blocks (oneTBB)
+    - Collective Communications Library (oneCCL)
 
-We only verified on CentOS as host OS, running on other Linux distributions should be straightforward.
+Generally, our common system requirements are the same with Intel® oneAPI Toolkit, please refer to [here](https://software.intel.com/content/www/us/en/develop/articles/intel-oneapi-base-toolkit-system-requirements.html) for details.
+
+We suggest you to add oneAPI Toolkits' `setvars.sh` script to shell startup script in all nodes so that the oneAPI library dependencies will be automatically resolved. Add the following line in `~/.bashrc`:
+```
+source /opt/intel/inteloneapi/setvars.sh &> /dev/null
+```
 
 ### Spark Configuration
 
-Since all dependencies are packaged into jar, you only need to set extra class path for Spark to point to this jar and `spark-submit` script will take care of the rest. 
+Except oneAPI components, all other dependencies are packaged into jar, you only need to set extra class path for Spark to point to this jar and `spark-submit` script will take care of the rest. 
 ```
 spark.driver.extraClassPath=/path/to/oap-mllib-jar
 spark.executor.extraClassPath=/path/to/oap-mllib-jar
@@ -91,7 +100,9 @@ DAALROOT    | Path to oneDAL home directory
 TBB_ROOT    | Path to oneTBB home directory
 CCL_ROOT    | Path to oneCCL home directory
 
-`DAALROOT`, `TBB_ROOT`, `CCL_ROOT` can be set by oneAPI Toolkits with `/opt/intel/inteloneapi/setvars.sh` script. If you would like to buid your own oneDAL, oneTBB or oneCCL, you can manually set the paths accordingly.
+`DAALROOT`, `TBB_ROOT`, `CCL_ROOT` can be set by oneAPI Toolkits with `/opt/intel/inteloneapi/setvars.sh` script.  
+
+If you prefer to buid your own open source [oneDAL](https://github.com/oneapi-src/oneDAL), [oneTBB](https://github.com/oneapi-src/oneTBB) or [oneCCL](ttps://github.com/oneapi-src/oneCCL) versions rather than use the ones included in oneAPI TookKits, you can refer to the related build instructions and manually set the paths accordingly.
 
 To build, run the following commands: 
 ```
@@ -99,7 +110,7 @@ To build, run the following commands:
     $ ./build.sh
 ```
 
-The built jar package will be placed in `target` directory.
+The built jar package will be placed in `target` directory with the name `oap-mllib-x.x.x-with-spark-x.x.x.jar`.
 
 ## Examples
 
