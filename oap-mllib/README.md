@@ -31,7 +31,7 @@ You can also build the package from source code, please refer to [Building](#Bui
 
 Generally, our common system requirements are the same with Intel® oneAPI Toolkit, please refer to [here](https://software.intel.com/content/www/us/en/develop/articles/intel-oneapi-base-toolkit-system-requirements.html) for details.
 
-Intel® oneAPI Toolkits (Beta) and its components can be downloaded and install from [here](https://software.intel.com/content/www/us/en/develop/tools/oneapi.html). Installation process for oneAPI using Package Managers (YUM (DNF), APT, and ZYPPER) is also available from [here](https://software.intel.com/content/www/us/en/develop/articles/oneapi-repo-instructions.html). Generally you only need to install oneAPI Base Toolkit for Linux. 
+Intel® oneAPI Toolkits (Beta) and its components can be downloaded and install from [here](https://software.intel.com/content/www/us/en/develop/tools/oneapi.html). Installation process for oneAPI using Package Managers (YUM (DNF), APT, and ZYPPER) is also available from [here](https://software.intel.com/content/www/us/en/develop/articles/oneapi-repo-instructions.html). Generally you only need to install __oneAPI Base Toolkit for Linux__ with all or selected components. 
 
 We suggest you to add oneAPI Toolkits' `setvars.sh` script to shell startup script in all nodes so that the oneAPI library dependencies will be automatically resolved. Add the following line in `~/.bashrc`:
 ```
@@ -105,7 +105,7 @@ CCL_ROOT    | Path to oneCCL home directory
 
 `DAALROOT`, `TBB_ROOT`, `CCL_ROOT` can be set by oneAPI Toolkits with `/opt/intel/inteloneapi/setvars.sh` script.  
 
-If you prefer to buid your own open source [oneDAL](https://github.com/oneapi-src/oneDAL), [oneTBB](https://github.com/oneapi-src/oneTBB) or [oneCCL](ttps://github.com/oneapi-src/oneCCL) versions rather than use the ones included in oneAPI TookKits, you can refer to the related build instructions and manually set the paths accordingly.
+If you prefer to buid your own open source [oneDAL](https://github.com/oneapi-src/oneDAL), [oneTBB](https://github.com/oneapi-src/oneTBB) or [oneCCL](https://github.com/oneapi-src/oneCCL) versions rather than use the ones included in oneAPI TookKits, you can refer to the related build instructions and manually set the paths accordingly.
 
 To build, run the following commands: 
 ```
