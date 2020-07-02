@@ -2,67 +2,6 @@
 #include <ccl.h>
 #include "org_apache_spark_ml_util_OneCCL__.h"
 
-static void test_allreduce(int rank, int size) {
-    
-    #define COUNT 128
-
-    int i = 0;
-
-    int sendbuf[COUNT];
-    int recvbuf[COUNT];
-
-    ccl_request_t request;
-    ccl_stream_t stream;
-
-    /* create CPU stream */
-    ccl_stream_create(ccl_stream_cpu, NULL, &stream);
-
-    /* initialize sendbuf */
-    for (i = 0; i < COUNT; i++) {
-        sendbuf[i] = rank;
-    }
-
-    /* modify sendbuf */
-    for (i = 0; i < COUNT; i++) {
-        sendbuf[i] += 1;
-    }
-
-    /* invoke ccl_allreduce */
-    ccl_allreduce(sendbuf,
-                  recvbuf,
-                  COUNT,
-                  ccl_dtype_int,
-                  ccl_reduction_sum,
-                  NULL, /* attr */
-                  NULL, /* comm */
-                  stream,
-                  &request);
-
-    ccl_wait(request);
-
-    /* check correctness of recvbuf */
-    for (i = 0; i < COUNT; i++) {
-       if (recvbuf[i] != size * (size + 1) / 2) {
-           recvbuf[i] = -1;
-       }
-    }
-
-    /* print out the result of the test */
-    if (rank == 0) {
-        for (i = 0; i < COUNT; i++) {
-            if (recvbuf[i] == -1) {
-                printf("FAILED\n");
-                break;
-            }
-        }
-        if (i == COUNT) {
-            printf("PASSED\n");
-        }
-    }
-
-    ccl_stream_free(stream);
-}
-
 JNIEXPORT jint JNICALL Java_org_apache_spark_ml_util_OneCCL_00024_c_1init
   (JNIEnv *env, jobject obj, jobject param) {
   
@@ -79,8 +18,6 @@ JNIEXPORT jint JNICALL Java_org_apache_spark_ml_util_OneCCL_00024_c_1init
 
   ccl_get_comm_size(NULL, &comm_size);
   ccl_get_comm_rank(NULL, &rank_id);
-
-//   test_allreduce(rank_id, comm_size);
 
   env->SetLongField(param, fid_comm_size, comm_size);
   env->SetLongField(param, fid_rank_id, rank_id);    
