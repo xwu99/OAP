@@ -1,11 +1,32 @@
 #!/usr/bin/env bash
 
-export SPARK_HOME=/home/xiaochang/opt/spark-3.0.0-bin-hadoop2.7
-export HADOOP_HOME=/home/xiaochang/opt/hadoop-2.7.3
-export HADOOP_CONF_DIR=$HADOOP_HOME/etc/hadoop
+# == User to customize the following environments ======= #
 
-# Set OneCCL Root
-CCLROOT=/home/xiaochang/Works/mlsl2/build/_install
+# Set user Spark and Hadoop home directory
+export SPARK_HOME=/path/to/your/spark/home
+export HADOOP_HOME=/path/to/your/hadoop/home
+# Set user HDFS Root
+export HDFS_ROOT=hdfs://your_hostname:8020
+# Set user Intel MLlib Root directory
+export OAP_MLLIB_ROOT=/path/to/your/OAP/oap-mllib
+# Set IP_Port to one of the worker nodes for oneCCL
+# If you have multiple IPs for nodes, use first IP returned from `hostname -I`
+export CCL_KVS_IP_PORT=192.168.0.1_51234
+
+# Data file is from Spark Examples (data/mllib/sample_kmeans_data.txt), the data file should be copied to HDFS
+DATA_FILE=data/sample_kmeans_data.txt
+
+# == User to customize Spark executor cores and memory == #
+
+SPARK_MASTER=yarn
+SPARK_DRIVER_MEMORY=1G
+SPARK_NUM_EXECUTORS=2
+SPARK_EXECUTOR_CORES=1
+SPARK_EXECUTOR_MEMORY=1G
+
+SPARK_DEFAULT_PARALLELISM=$(expr $SPARK_NUM_EXECUTORS '*' $SPARK_EXECUTOR_CORES '*' 2)
+
+# ======================================================= #
 
 # Check env
 if [[ -z $SPARK_HOME ]]; then
@@ -33,45 +54,16 @@ if [[ -z $CCLROOT ]]; then
     exit 1
 fi
 
-SPARK_MASTER=yarn
-SPARK_DRIVER_MEMORY=1G
-SPARK_NUM_EXECUTORS=3
-SPARK_EXECUTOR_CORES=2
-SPARK_EXECUTOR_MEMORY=2G
-
-SPARK_DEFAULT_PARALLELISM=$(expr $SPARK_NUM_EXECUTORS '*' $SPARK_EXECUTOR_CORES '*' 2)
-
-# Set user OAP MLlib Root directory
-OAP_MLLIB_ROOT=/home/xiaochang/Works/OAP/oap-mllib
 # Target jar built
-OAP_MLLIB_JAR=$OAP_MLLIB_ROOT/mllib-dal/target/oap-mllib-1.0-SNAPSHOT-jar-with-dependencies.jar
-DAAL_JAR=$DAALROOT/lib/daal.jar
-# Comma-separated list of jars
-SHARED_JARS=$OAP_MLLIB_JAR,$DAAL_JAR
-# Comma-separated list of so
-SHARED_LIBS=${DAALROOT}/lib/intel64/libJavaAPI.so,${TBBROOT}/lib/intel64/gcc4.8/libtbb.so.2,${TBBROOT}/lib/intel64/gcc4.8/libtbbmalloc.so.2
-# All files to be uploaded
-SPARK_FILES=$SHARED_JARS,$SHARED_LIBS
+OAP_MLLIB_JAR_NAME=oap-mllib-0.9.0-with-spark-3.0.0.jar
+OAP_MLLIB_JAR=$OAP_MLLIB_ROOT/mllib-dal/target/$OAP_MLLIB_JAR_NAME
 
 # Use absolute path
-SPARK_DRIVER_CLASSPATH=$OAP_MLLIB_JAR:$DAAL_JAR
+SPARK_DRIVER_CLASSPATH=$OAP_MLLIB_JAR
 # Use relative path
-SPARK_EXECUTOR_CLASSPATH=./oap-mllib-1.0-SNAPSHOT-jar-with-dependencies.jar:./daal.jar
-
-# Set IP Port to one of the executors
-CCL_KVS_IP_PORT=10.0.0.138_51234
+SPARK_EXECUTOR_CLASSPATH=./$OAP_MLLIB_JAR_NAME
 
 APP_PY=kmeans-pyspark.py
-
-# Data file is from Spark Examples (data/mllib/sample_kmeans_data.txt), the data file should be copied to HDFS
-# DATA_FILE=data/sample_kmeans_data.txt
-DATA_FILE=data/a1a
-
-    # --conf "spark.executorEnv.CCL_ATL_TRANSPORT=ofi" \
-    # --conf "spark.executorEnv.CCL_PM_TYPE=resizable" \
-    # --conf "spark.executorEnv.CCL_KVS_IP_EXCHANGE=env" \
-    # --conf "spark.executorEnv.CCL_KVS_IP_PORT=$CCL_KVS_IP_PORT" \
-    # --conf "spark.executorEnv.CCL_WORLD_SIZE=$SPARK_NUM_EXECUTORS" \
 
 /usr/bin/time -p $SPARK_HOME/bin/spark-submit --master $SPARK_MASTER -v \
     --num-executors $SPARK_NUM_EXECUTORS \
@@ -81,10 +73,10 @@ DATA_FILE=data/a1a
     --conf "spark.serializer=org.apache.spark.serializer.KryoSerializer" \
     --conf "spark.default.parallelism=$SPARK_DEFAULT_PARALLELISM" \
     --conf "spark.sql.shuffle.partitions=$SPARK_DEFAULT_PARALLELISM" \
-    --conf "spark.executorEnv.CCL_KVS_IP_PORT=$CCL_KVS_IP_PORT" \
-    --conf "spark.shuffle.reduceLocality.enabled=false" \
     --conf "spark.driver.extraClassPath=$SPARK_DRIVER_CLASSPATH" \
     --conf "spark.executor.extraClassPath=$SPARK_EXECUTOR_CLASSPATH" \
-    --files $SPARK_FILES \
+    --conf "spark.executorEnv.CCL_KVS_IP_PORT=$CCL_KVS_IP_PORT" \
+    --conf "spark.shuffle.reduceLocality.enabled=false" \
+    --jars $OAP_MLLIB_JAR \
     $APP_PY $DATA_FILE \
     2>&1 | tee KMeans-$(date +%m%d_%H_%M_%S).log

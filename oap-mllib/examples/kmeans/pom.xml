@@ -4,7 +4,7 @@
 
   <groupId>com.intel.oap</groupId>
   <artifactId>oap-mllib-examples</artifactId>
-  <version>1.0-SNAPSHOT</version>
+  <version>0.9.0-with-spark-3.0.0</version>
   <packaging>jar</packaging>
 
   <name>KMeansExample</name>  
@@ -103,7 +103,7 @@
         <artifactId>maven-assembly-plugin</artifactId>
         <version>3.0.0</version>
         <configuration>
-          <appendAssemblyId>true</appendAssemblyId>
+          <appendAssemblyId>false</appendAssemblyId>
           <descriptorRefs>
             <descriptorRef>jar-with-dependencies</descriptorRef>
           </descriptorRefs>
