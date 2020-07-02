@@ -40,32 +40,9 @@ object OneCCL {
 
   }
 
-  // Run on Driver
-  def setDefaultExecutorEnv(): Unit = {
-
-    val conf = new SparkConf(true)
-
-    val ccl_root_path = "/home/xiaochang/Works/mlsl2/build/_install"
-    val ccl_root_ipport = "10.239.44.22_3000"
-
-    conf.setExecutorEnv("CCL_PM_TYPE","resizable")
-      .setExecutorEnv("CCL_ATL_TRANSPORT","ofi")
-      .setExecutorEnv("CCL_KVS_IP_EXCHANGE","env")
-      .setExecutorEnv("CCL_KVS_IP_PORT", ccl_root_ipport)
-      .setExecutorEnv("CCL_ROOT", ccl_root_path)
-      .setExecutorEnv("CCL_WORLD_SIZE", Utils.sparkExecutorNum().toString)
-      .setExecutorEnv("I_MPI_ROOT", ccl_root_path)
-      .setExecutorEnv("CCL_ATL_TRANSPORT_PATH", s"$ccl_root_path/lib")
-      .setExecutorEnv("FI_PROVIDER_PATH",s"$ccl_root_path/lib/prov")
-  }
-
   // Run on Executor
   def setExecutorEnv(executor_num: Int, ip: String, port: Int): Unit = {
-    // TODO: pack *.so inside jar
-    val ccl_root_path = "/home/xiaochang/Works/mlsl2/build/_install"
-//    val ccl_root_path = "./lib/oneccl"
-
-    // Work around ccl by passings in a spark.executorEnv.CCL_KVS_IP_PORT. eg: 10.0.0.138_3000
+    // Work around ccl by passings in a spark.executorEnv.CCL_KVS_IP_PORT.
     val ccl_kvs_ip_port = sys.env.getOrElse("CCL_KVS_IP_PORT", s"${ip}_${port}")
 
     println(s"oneCCL: Initializing with CCL_KVS_IP_PORT: $ccl_kvs_ip_port")
@@ -75,9 +52,6 @@ object OneCCL {
     setEnv("CCL_KVS_IP_EXCHANGE","env")
     setEnv("CCL_KVS_IP_PORT", ccl_kvs_ip_port)
     setEnv("CCL_WORLD_SIZE", s"${executor_num}")
-//    setEnv("I_MPI_ROOT", ccl_root_path)
-//    setEnv("CCL_ATL_TRANSPORT_PATH", s"$ccl_root_path/lib")
-//    setEnv("FI_PROVIDER_PATH",s"$ccl_root_path/lib/prov")
   }
 
   def init(executor_num: Int, ip: String, port: Int) = {

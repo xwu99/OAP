@@ -19,18 +19,12 @@ package org.apache.spark.ml.util
 
 import com.intel.daal.data_management.data.{HomogenNumericTable, NumericTable, Matrix => DALMatrix}
 import com.intel.daal.services.DaalContext
-//import com.intel.daal.services.Environment
 import org.apache.spark.ml.linalg.{Vector, Vectors}
-import org.apache.spark.mllib.linalg.{Vector => OldVector, Vectors => OldVectors}
-import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{Dataset, Row}
-import org.apache.spark.storage.StorageLevel
-
-import scala.collection.mutable.ArrayBuffer
+import org.apache.spark.mllib.linalg.{Vector => OldVector}
 
 object OneDAL {
 
-  // Convert DAL numeric table to array of vectors, TODO: improve perf
+  // Convert DAL numeric table to array of vectors
   def numericTableToVectors(table: NumericTable): Array[Vector] = {
     val numRows = table.getNumberOfRows.toInt
     val numCols = table.getNumberOfColumns.toInt
@@ -46,74 +40,6 @@ object OneDAL {
     }
 
     resArray
-  }
-
-  // Convert all dataset rows and columns into HomogenNumericTable
-  def datasetToRDDNumericTable(dataset: Dataset[_]): RDD[HomogenNumericTable] = {
-    val data = dataset.toDF()
-    val numCols: Int = data.schema.fields.length
-    val tablesRDD = data.rdd.mapPartitions(
-      (it: Iterator[Row]) => {
-
-        val tables = new ArrayBuffer[HomogenNumericTable]()
-        // here we need get the numRows, so convert the iterator to array.
-        val arrayData = it.toArray
-        val numRows: Int = arrayData.size
-
-        val context = new DaalContext()
-        val matrix = new DALMatrix(context, classOf[java.lang.Double],
-          numCols.toLong, numRows.toLong, NumericTable.AllocationFlag.DoAllocate)
-
-        arrayData.zipWithIndex.foreach {
-          case (row, rowIndex) =>
-            for (colIndex <- 0 until numCols)
-//            matrix.set(rowIndex, colIndex, row.getString(colIndex).toDouble)
-              setNumericTableValue(matrix.getCNumericTable, rowIndex, colIndex, row.getString(colIndex).toDouble)
-        }
-
-        matrix.pack()
-        tables += matrix
-
-        context.dispose()
-        tables.iterator
-      }
-    ).persist(StorageLevel.MEMORY_AND_DISK)
-    tablesRDD
-  }
-
-  // Convert a single Vector column into HomogenNumericTable
-  def rddVectorToRDDNumericTable(instances: RDD[Vector]): RDD[HomogenNumericTable] = {
-    val tablesRDD = instances.mapPartitions(
-      (it: Iterator[Vector]) => {
-        println("oneDAL: rddVectorToRDDNumericTable")
-        val tables = new ArrayBuffer[HomogenNumericTable]()
-        // here we need get the numRows, so convert the iterator to array.
-        val arrayData = it.toArray
-        val numCols = arrayData.head.size
-        val numRows: Int = arrayData.size
-
-        val context = new DaalContext()
-        val matrix = new DALMatrix(context, classOf[java.lang.Double],
-          numCols.toLong, numRows.toLong, NumericTable.AllocationFlag.DoAllocate)
-
-        arrayData.zipWithIndex.foreach {
-          case (v, rowIndex) =>
-            for (colIndex <- 0 until numCols)
-            //            matrix.set(rowIndex, colIndex, row.getString(colIndex).toDouble)
-              setNumericTableValue(matrix.getCNumericTable, rowIndex, colIndex, v(colIndex))
-        }
-
-        Service.printNumericTable("oneDAL: First 10 rows of input matrix :", matrix, 10)
-
-        matrix.pack()
-        tables += matrix
-
-        context.dispose()
-        tables.iterator
-      }
-    )
-//      .persist(StorageLevel.MEMORY_AND_DISK)
-    tablesRDD
   }
 
   def makeNumericTable (cData: Long) : NumericTable = {
@@ -136,7 +62,7 @@ object OneDAL {
     arrayVectors.zipWithIndex.foreach {
       case (v, rowIndex) =>
         for (colIndex <- 0 until numCols)
-        //            matrix.set(rowIndex, colIndex, row.getString(colIndex).toDouble)
+        // matrix.set(rowIndex, colIndex, row.getString(colIndex).toDouble)
           setNumericTableValue(matrix.getCNumericTable, rowIndex, colIndex, v(colIndex))
     }
 
