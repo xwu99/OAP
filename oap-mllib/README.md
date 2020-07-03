@@ -24,7 +24,7 @@ You can also build the package from source code, please refer to [Building](#Bui
 * CentOS 7.0+, Ubuntu 18.04 LTS+
 * Java 8.0+
 * Apache Spark 3.0.0+
-* Intel® oneAPI Toolkits (Beta) 2021.1-beta06+ Components: 
+* Intel® oneAPI Toolkits (Beta) 2021.1-beta07+ Components: 
     - Data Analytics Library (oneDAL)
     - Threading Building Blocks (oneTBB)
     - Collective Communications Library (oneCCL)
@@ -33,7 +33,7 @@ Generally, our common system requirements are the same with Intel® oneAPI Toolk
 
 Intel® oneAPI Toolkits (Beta) and its components can be downloaded and install from [here](https://software.intel.com/content/www/us/en/develop/tools/oneapi.html). Installation process for oneAPI using Package Managers (YUM (DNF), APT, and ZYPPER) is also available from [here](https://software.intel.com/content/www/us/en/develop/articles/oneapi-repo-instructions.html). Generally you only need to install __oneAPI Base Toolkit for Linux__ with all or selected components. 
 
-We suggest you to add oneAPI Toolkits' `setvars.sh` script to shell startup script in all nodes so that the oneAPI library dependencies will be automatically resolved. Add the following line in `~/.bashrc`:
+We suggest you to add oneAPI Toolkits' `setvars.sh` script to shell startup script in __all cluster nodes__ so that the oneAPI library dependencies will be automatically resolved. Add the following line in `~/.bashrc`:
 ```
 source /opt/intel/inteloneapi/setvars.sh &> /dev/null
 ```
@@ -76,7 +76,7 @@ We use [Apache Maven](https://maven.apache.org/) to manage and build source code
 * JDK 8.0+
 * Apache Maven 3.6.2+
 * GNU GCC 4.8.5+
-* Intel® oneAPI Toolkits (Beta) 2021.1-beta06+ Components: 
+* Intel® oneAPI Toolkits (Beta) 2021.1-beta07+ Components: 
     - Data Analytics Library (oneDAL)
     - Threading Building Blocks (oneTBB)
     - Collective Communications Library (oneCCL)
