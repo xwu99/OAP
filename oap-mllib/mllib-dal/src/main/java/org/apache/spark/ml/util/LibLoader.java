@@ -13,23 +13,22 @@ public final class LibUtils {
 
     private final static String subDir = "MLlibDAL_" + new Date().getTime();
 
-    private static final Logger logger = Logger.getLogger(com.intel.daal.utils.LibUtils.class.getName());
-    private static final Level logLevel = Level.FINE;
+    private static final Logger logger = Logger.getLogger(LibUtils.class.getName());
+    private static final Level logLevel = Level.INFO;
 
     /**
      * Load MLlibDAL lib and TBB libs (TBB is only available as dynamic lib)
      */
-    public static void loadLibrary()
-    {
-        try {
+    public static void loadLibrary() throws IOException {
+//        try {
             loadFromJar(subDir, TBBLIB);
             loadFromJar(subDir, TBBMALLOCLIB);
             loadFromJar(subDir, MLLIB_DAL_LIB);
-            return;
-        }
-        catch (Throwable e) {
-            logger.log(logLevel, "Error: Can`t load library as resource.");
-        }
+//            return;
+//        }
+//        catch (Throwable e) {
+//            logger.log(logLevel, "Error: Can`t load library as resource.");
+//        }
     }
 
     /**
@@ -79,6 +78,7 @@ public final class LibUtils {
             streamIn.close();
         }
 
+        logger.log(logLevel, fileOut.toString());
         System.load(fileOut.toString());
         logger.log(logLevel, "DONE: Loading library as resource.");
     }

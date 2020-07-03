@@ -56,6 +56,7 @@ $(OUTPUT): $(OBJS)
 	@echo ' '
 
 clean:
+	@echo 'Cleaning up'
 	-$(RM) $(OBJS) $(OUTPUT)
 	-@echo ' '
 
