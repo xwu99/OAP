@@ -23,7 +23,7 @@ import com.intel.daal.services.DaalContext
 import org.apache.spark.ml.util._
 import org.apache.spark.mllib.clustering.{DistanceMeasure, KMeansModel => MLlibKMeansModel}
 import org.apache.spark.ml.linalg.Vector
-import org.apache.spark.ml.util.OneDAL.setNumericTableValue
+import org.apache.spark.ml.util.OneDAL._
 import org.apache.spark.mllib.linalg.{Vector => OldVector, Vectors => OldVectors}
 import org.apache.spark.rdd.RDD
 
@@ -50,15 +50,15 @@ class KMeansDALImpl (
     val numCols = partitionDims(index)._2
 
     println(s"KMeansDALImpl: Partition index: $index, numCols: $numCols, numRows: $numRows")
-    println("KMeansDALImpl: Loading libMLlibDAL.so" )
 
-    // extract libMLlibDAL.so to temp file and load
-    LibUtils.loadLibrary()
-
-    // Build DALMatrix
+    // Build DALMatrix, this will load libJavaAPI, libtbb, libtbbmalloc
     val context = new DaalContext()
     val localData = new DALMatrix(context, classOf[java.lang.Double],
       numCols.toLong, numRows.toLong, NumericTable.AllocationFlag.DoAllocate)
+
+    println("KMeansDALImpl: Loading libMLlibDAL.so" )
+    // oneDAL libs should be loaded by now, extract libMLlibDAL.so to temp file and load
+    LibLoader.loadLibrary()
 
     println(s"KMeansDALImpl: Start data conversion")
 
@@ -68,7 +68,7 @@ class KMeansDALImpl (
         for (colIndex <- 0 until numCols)
           // TODO: Add matrix.set API in DAL to replace this
           // matrix.set(rowIndex, colIndex, row.getString(colIndex).toDouble)
-          setNumericTableValue(localData.getCNumericTable, rowIndex, colIndex, v(colIndex))
+          OneDAL.setNumericTableValue(localData.getCNumericTable, rowIndex, colIndex, v(colIndex))
     }
 
     val duration = (System.nanoTime - start) / 1E9
