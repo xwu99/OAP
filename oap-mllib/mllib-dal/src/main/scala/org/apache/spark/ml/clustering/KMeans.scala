@@ -18,31 +18,34 @@
 package org.apache.spark.ml.clustering
 
 import com.intel.daal.data_management.data.HomogenNumericTable
+
+import scala.collection.mutable
+
 import org.apache.hadoop.fs.Path
+
 import org.apache.spark.annotation.Since
+import org.apache.spark.ml.{Estimator, Model, PipelineStage}
 import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.ml.param._
 import org.apache.spark.ml.param.shared._
+import org.apache.spark.ml.util._
 import org.apache.spark.ml.util.Instrumentation.instrumented
-import org.apache.spark.ml.util.{OneCCL, OneDAL, _}
-import org.apache.spark.ml.{Estimator, Model, PipelineStage}
 import org.apache.spark.mllib.clustering.{DistanceMeasure, VectorWithNorm, KMeans => MLlibKMeans, KMeansModel => MLlibKMeansModel}
-import org.apache.spark.mllib.linalg.VectorImplicits._
 import org.apache.spark.mllib.linalg.{Vector => OldVector, Vectors => OldVectors}
+import org.apache.spark.mllib.linalg.VectorImplicits._
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.functions.udf
-import org.apache.spark.sql.types.{IntegerType, StructType}
 import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession}
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.types.{DoubleType, IntegerType, StructType}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.util.VersionUtils.majorVersion
 
-import scala.collection.mutable
 
 /**
  * Common params for KMeans and KMeansModel
  */
 private[clustering] trait KMeansParams extends Params with HasMaxIter with HasFeaturesCol
-  with HasSeed with HasPredictionCol with HasTol with HasDistanceMeasure {
+  with HasSeed with HasPredictionCol with HasTol with HasDistanceMeasure with HasWeightCol {
 
   /**
    * The number of clusters to create (k). Must be &gt; 1. Note that it is possible for fewer than
@@ -109,6 +112,9 @@ class KMeansModel private[ml] (
   extends Model[KMeansModel] with KMeansParams with GeneralMLWritable
     with HasTrainingSummary[KMeansSummary] {
 
+  @Since("3.0.0")
+  lazy val numFeatures: Int = parentModel.clusterCenters.head.size
+
   @Since("1.5.0")
   override def copy(extra: ParamMap): KMeansModel = {
     val copied = copyValues(new KMeansModel(uid, parentModel), extra)
@@ -125,17 +131,23 @@ class KMeansModel private[ml] (
 
   @Since("2.0.0")
   override def transform(dataset: Dataset[_]): DataFrame = {
-    transformSchema(dataset.schema, logging = true)
+    val outputSchema = transformSchema(dataset.schema, logging = true)
 
     val predictUDF = udf((vector: Vector) => predict(vector))
 
     dataset.withColumn($(predictionCol),
-      predictUDF(DatasetUtils.columnToVector(dataset, getFeaturesCol)))
+      predictUDF(DatasetUtils.columnToVector(dataset, getFeaturesCol)),
+      outputSchema($(predictionCol)).metadata)
   }
 
   @Since("1.5.0")
   override def transformSchema(schema: StructType): StructType = {
-    validateAndTransformSchema(schema)
+    var outputSchema = validateAndTransformSchema(schema)
+    if ($(predictionCol).nonEmpty) {
+      outputSchema = SchemaUtils.updateNumValues(outputSchema,
+        $(predictionCol), parentModel.k)
+    }
+    outputSchema
   }
 
   @Since("3.0.0")
@@ -153,6 +165,12 @@ class KMeansModel private[ml] (
    */
   @Since("1.6.0")
   override def write: GeneralMLWriter = new GeneralMLWriter(this)
+
+  @Since("3.0.0")
+  override def toString: String = {
+    s"KMeansModel: uid=$uid, k=${parentModel.k}, distanceMeasure=${$(distanceMeasure)}, " +
+      s"numFeatures=$numFeatures"
+  }
 
   /**
    * Gets summary of model on training set. An exception is
@@ -305,17 +323,34 @@ class KMeans @Since("1.5.0") (
   @Since("1.5.0")
   def setSeed(value: Long): this.type = set(seed, value)
 
+  /**
+   * Sets the value of param [[weightCol]].
+   * If this is not set or empty, we treat all instance weights as 1.0.
+   * Default is not set, so all instances have weight one.
+   *
+   * @group setParam
+   */
+  @Since("3.0.0")
+  def setWeightCol(value: String): this.type = set(weightCol, value)
+
   @Since("2.0.0")
   override def fit(dataset: Dataset[_]): KMeansModel = instrumented { instr =>
     transformSchema(dataset.schema, logging = true)
 
-    // will handle persistence only for trainWithML
-    val handlePersistence = (dataset.storageLevel == StorageLevel.NONE && $(distanceMeasure) != "euclidean")
-//    val handlePersistence = dataset.storageLevel == StorageLevel.NONE
+    val handleWeight = isDefined(weightCol) && $(weightCol).nonEmpty
+    val useKMeansDAL = $(distanceMeasure) == "euclidean" && !handleWeight
 
-    val instances: RDD[Vector] = dataset
-      .select(DatasetUtils.columnToVector(dataset, getFeaturesCol)).rdd.map {
-      case Row(point: Vector) => point
+    // will handle persistence only for trainWithML
+    val handlePersistence = (dataset.storageLevel == StorageLevel.NONE && !useKMeansDAL)
+    val w = if (handleWeight) {
+      col($(weightCol)).cast(DoubleType)
+    } else {
+      lit(1.0)
+    }
+
+    val instances: RDD[(Vector, Double)] = dataset
+      .select(DatasetUtils.columnToVector(dataset, getFeaturesCol), w).rdd.map {
+      case Row(point: Vector, weight: Double) => (point, weight)
     }
 
     if (handlePersistence) {
@@ -325,25 +360,15 @@ class KMeans @Since("1.5.0") (
     instr.logPipelineStage(this)
     instr.logDataset(dataset)
     instr.logParams(this, featuresCol, predictionCol, k, initMode, initSteps, distanceMeasure,
-      maxIter, seed, tol)
+      maxIter, seed, tol, weightCol)
 
-    val model = if ($(distanceMeasure) == "euclidean") {
+    val model = if (useKMeansDAL) {
       instances.setName("instancesRDD").cache()
       trainWithDAL(instances)
     } else {
       trainWithML(instances)
     }
 
-//    val algo = new MLlibKMeans()
-//      .setK($(k))
-//      .setInitializationMode($(initMode))
-//      .setInitializationSteps($(initSteps))
-//      .setMaxIterations($(maxIter))
-//      .setSeed($(seed))
-//      .setEpsilon($(tol))
-//      .setDistanceMeasure($(distanceMeasure))
-//    val parentModel = algo.run(instances, Option(instr))
-//    val model = copyValues(new KMeansModel(uid, parentModel).setParent(this))
     val summary = new KMeansSummary(
       model.transform(dataset),
       $(predictionCol),
@@ -360,7 +385,7 @@ class KMeans @Since("1.5.0") (
     model
   }
 
-  private def trainWithDAL(instances: RDD[Vector]): KMeansModel = instrumented { instr =>
+  private def trainWithDAL(instances: RDD[(Vector, Double)]): KMeansModel = instrumented { instr =>
 
     val executor_num = Utils.sparkExecutorNum()
     val executor_cores = Utils.sparkExecutorCores()
@@ -383,7 +408,9 @@ class KMeans @Since("1.5.0") (
       .setEpsilon($(tol))
       .setDistanceMeasure($(distanceMeasure))
 
-    val dataWithNorm = instances.map(new VectorWithNorm(_))
+    val dataWithNorm = instances.map {
+      case (point: Vector, weight: Double) => new VectorWithNorm(point)
+    }
     val centersWithNorm = if ($(initMode) == "random") {
       mllibKMeans.initRandom(dataWithNorm)
     } else {
@@ -398,20 +425,13 @@ class KMeans @Since("1.5.0") (
     logInfo(f"Initialization with $strInitMode took $initTimeInSeconds%.3f seconds.")
 
     // Repartition and convert to RDD[HomogenNumericTable]
-    val repartitioned = instances.repartition(executor_num).setName("Repartitioned for conversion").cache()
-//    val repartitioned = instances.coalesce(executor_num).setName("Coalesced for conversion")
-//    repartitioned.count()
-
-//    val numericTables: RDD[HomogenNumericTable] = OneDAL.rddVectorToRDDNumericTable(repartitioned)
-//    numericTables.count()
-
-    // Release instances to save memory
-//    instances.unpersist()
+    val repartitioned = instances.map {
+      case (point: Vector, weight: Double) => point
+    }.repartition(executor_num).setName("Repartitioned for conversion").cache()
 
     val kmeansDAL = new KMeansDALImpl(getK, getMaxIter, getTol,
       DistanceMeasure.EUCLIDEAN, centers, executor_num, executor_cores)
 
-//    val parentModel = kmeansDAL.run(numericTables, Option(instr))
     val parentModel = kmeansDAL.runWithRDDVector(repartitioned, Option(instr))
 
     val model = copyValues(new KMeansModel(uid, parentModel).setParent(this))
@@ -420,9 +440,9 @@ class KMeans @Since("1.5.0") (
 
   }
 
-  private def trainWithML(instances: RDD[Vector]): KMeansModel = instrumented { instr =>
+  private def trainWithML(instances: RDD[(Vector, Double)]): KMeansModel = instrumented { instr =>
       val oldVectorInstances = instances.map {
-        case (point: Vector) => OldVectors.fromML(point)
+        case (point: Vector, weight: Double) => (OldVectors.fromML(point), weight)
       }
       val algo = new MLlibKMeans()
         .setK($(k))
@@ -432,7 +452,7 @@ class KMeans @Since("1.5.0") (
         .setSeed($(seed))
         .setEpsilon($(tol))
         .setDistanceMeasure($(distanceMeasure))
-      val parentModel = algo.run(oldVectorInstances, Option(instr))
+      val parentModel = algo.runWithWeight(oldVectorInstances, Option(instr))
       val model = copyValues(new KMeansModel(uid, parentModel).setParent(this))
       model
     }
