@@ -14,7 +14,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <scala.version>2.12.10</scala.version>
     <scala.binary.version>2.12</scala.binary.version>
-    <spark.version>3.0.0-preview</spark.version>
+    <spark.version>3.0.0</spark.version>
   </properties>
 
   <dependencies>
@@ -72,7 +72,7 @@
     <dependency>
       <groupId>com.intel.daal</groupId>
       <artifactId>daal</artifactId>
-      <version>2021.1-beta05</version>
+      <version>2021.1-beta</version>
       <scope>system</scope>
       <systemPath>${env.ONEAPI_ROOT}/daal/latest/lib/daal.jar</systemPath>
     </dependency>
