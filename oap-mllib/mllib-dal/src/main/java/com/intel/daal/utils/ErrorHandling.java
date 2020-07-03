@@ -20,6 +20,9 @@
  * @ingroup services
  * @{
  */
+
+//  Based on oneDAL Java example code
+
 package com.intel.daal.utils;
 
 import java.lang.System;
