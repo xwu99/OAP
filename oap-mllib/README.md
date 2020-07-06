@@ -33,9 +33,10 @@ Generally, our common system requirements are the same with Intel® oneAPI Toolk
 
 Intel® oneAPI Toolkits (Beta) and its components can be downloaded and install from [here](https://software.intel.com/content/www/us/en/develop/tools/oneapi.html). Installation process for oneAPI using Package Managers (YUM (DNF), APT, and ZYPPER) is also available from [here](https://software.intel.com/content/www/us/en/develop/articles/oneapi-repo-instructions.html). Generally you only need to install __oneAPI Base Toolkit for Linux__ with all or selected components. 
 
-We suggest you to install oneAPI Toolkits in __all cluster nodes__ and also add oneAPI Toolkits' `setvars.sh` script to shell startup script in __all nodes__ so that the oneAPI library dependencies will be automatically resolved. Add the following line in `~/.bashrc`:
+We suggest you to install oneAPI Toolkits in __all cluster nodes__ and also add oneAPI Toolkits' `setvars.sh` script to shell startup script in __all nodes__ so that the oneAPI library dependencies will be automatically resolved. Add the following line in `~/.bashrc` to setup oneAPI and switch oneCCL to `cpu_icc` configuration for CPU only libraries:
 ```
 source /opt/intel/inteloneapi/setvars.sh &> /dev/null
+source $CCL_ROOT/env/vars.sh --ccl-configuration=cpu_icc
 ```
 
 Don't forget to restart your YARN cluster manager to apply this change!
