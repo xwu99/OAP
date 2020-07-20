@@ -36,7 +36,6 @@ You only need to set extra class path for Spark to point to this jar and `spark-
 spark.driver.extraClassPath=/path/to/oap-mllib-jar
 spark.executor.extraClassPath=/path/to/oap-mllib-jar
 ```
-
 You can also choose to set those in `spark-defaults.conf`, then Intel MLlib will be default to run all MLlib applications.
 
 ### Sanity Check
@@ -141,4 +140,3 @@ kmeans-hibench  |  Use HiBench-generated input dataset to benchmark K-means perf
 ## List of Accelerated Algorithms
 
 * K-Means (CPU, Experimental)
-

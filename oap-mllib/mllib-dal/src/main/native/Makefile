@@ -30,6 +30,7 @@ INCS := -I $(JAVA_HOME)/include \
         -I ./
 
 # Use static link if possible, TBB is only available as dynamic libs
+
 LIBS := -L${CCL_ROOT}/lib -l:libccl.a \
         -L$(DAALROOT)/lib/intel64 -l:libdaal_core.a -l:libdaal_thread.a \
         -L$(TBBROOT)/lib -ltbb -ltbbmalloc
