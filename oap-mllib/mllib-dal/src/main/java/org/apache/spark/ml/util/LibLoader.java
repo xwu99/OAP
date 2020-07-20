@@ -25,7 +25,6 @@ import java.util.logging.Logger;
 
 public final class LibLoader {
     private static final String LIBRARY_PATH_IN_JAR = "/lib";
-//    private final static String MLLIB_DAL_LIB = "libMLlibDAL";
     private final static String subDir = "MLlibDAL_" + new Date().getTime();
 
     private static final Logger logger = Logger.getLogger(LibLoader.class.getName());
@@ -96,42 +95,6 @@ public final class LibLoader {
         System.load(fileOut.toString());
         logger.log(logLevel, "DONE: Loading library as resource.");
     }
-
-    /**
-     * Construct library file name
-     *
-     * @param name library name
-     * @return constructed file name
-     */
-//    public static String createLibraryFileName(String name) throws IOException {
-//        String fullName;
-//
-//        String OSname = System.getProperty("os.name");
-//        OSname = OSname.toLowerCase();
-//
-//        if (OSname.startsWith("windows")) {
-//            fullName = name + ".dll";
-//            return fullName;
-//        }
-//
-//        if (OSname.startsWith("linux")) {
-//            if (name.contains("tbb")) {
-//                fullName = "lib" + name + ".so.2";
-//            } else if (name.equals("pmi") {
-//
-//            } else {
-//                fullName = "lib" + name + ".so";
-//            }
-//            return fullName;
-//        }
-//
-//        if (OSname.startsWith("mac os")) {
-//            fullName = "lib" + name + ".dylib";
-//            return fullName;
-//        }
-//
-//        throw new IOException("Error: Unknown OS " + OSname);
-//    }
 
     /**
      * Create temporary file

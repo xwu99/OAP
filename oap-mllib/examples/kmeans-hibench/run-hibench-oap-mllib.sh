@@ -76,7 +76,7 @@ INPUT_HDFS=$HDFS_ROOT/HiBench/Kmeans/Input/samples
     --conf "spark.executorEnv.CCL_KVS_IP_PORT=$CCL_KVS_IP_PORT" \
     --conf "spark.shuffle.reduceLocality.enabled=false" \
     --conf "spark.executor.memoryOverhead=$SPARK_EXECUTOR_MEMORY_OVERHEAD" \
-    --conf "spark.memory.fraction=0.8" \    
+    --conf "spark.memory.fraction=0.8" \
     --conf "spark.network.timeout=1200s" \
     --conf "spark.task.maxFailures=1" \
     --jars $OAP_MLLIB_JAR \
