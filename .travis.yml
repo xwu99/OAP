@@ -112,7 +112,7 @@ jobs:
       - echo ${TRAVIS_COMMIT_MESSAGE}
       - ${TRAVIS_BUILD_DIR}/oap-mllib/dev/install-build-deps-bionic.sh
       install:
-      - cd ${TRAVIS_BUILD_DIR}/travis
+      - cd ${TRAVIS_BUILD_DIR}/oap-mllib/travis
       - ./setup-cluster.sh
       before_script:
       script:
