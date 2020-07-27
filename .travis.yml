@@ -113,7 +113,7 @@ jobs:
       - ${TRAVIS_BUILD_DIR}/oap-mllib/dev/install-build-deps-bionic.sh
       install:
       - cd ${TRAVIS_BUILD_DIR}/oap-mllib
-      - ./travis/setup-cluster.sh
+      - sudo ./travis/setup-cluster.sh
       before_script:
       script:
       - cd ${TRAVIS_BUILD_DIR}/oap-mllib/mllib-dal
