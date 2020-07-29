@@ -110,7 +110,7 @@ jobs:
       - openjdk8
       before_install:
       - echo ${TRAVIS_COMMIT_MESSAGE}
-      - ${TRAVIS_BUILD_DIR}/oap-mllib/dev/install-build-deps-bionic.sh
+      - ${TRAVIS_BUILD_DIR}/oap-mllib/dev/install-build-deps-ubuntu.sh
       install:
       - cd ${TRAVIS_BUILD_DIR}/oap-mllib
       - sudo ./travis/setup-cluster.sh
