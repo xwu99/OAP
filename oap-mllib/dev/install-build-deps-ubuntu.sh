@@ -12,6 +12,7 @@ sudo apt-get install intel-oneapi-daal-devel-2021.1-beta07 intel-oneapi-tbb-deve
 echo "Building oneCCL ..."
 cd /tmp
 git clone https://github.com/oneapi-src/oneCCL
+git checkout -b 2021.1-beta07-1 origin/2021.1-beta07-1
 cd oneCCL && mkdir build && cd build
 cmake ..
 make -j 2 install
