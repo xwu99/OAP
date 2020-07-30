@@ -27,7 +27,7 @@ import com.intel.oap.vectorized.ExpressionEvaluator
 import com.intel.oap.vectorized.BatchIterator
 
 import org.apache.spark.internal.Logging
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.SparkConf
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
@@ -52,7 +52,8 @@ import scala.collection.immutable.List
 import scala.collection.mutable.ArrayBuffer
 
 class ColumnarSorter(
-    sorter: ExpressionEvaluator,
+    sortOrder: Seq[SortOrder],
+    outputAsColumnar: Boolean,
     outputAttributes: Seq[Attribute],
     sortTime: SQLMetric,
     outputBatches: SQLMetric,
@@ -61,12 +62,36 @@ class ColumnarSorter(
     elapse: SQLMetric,
     sparkConf: SparkConf)
     extends Logging {
+
+  logInfo(s"ColumnarSorter sortOrder is ${sortOrder}, outputAttributes is ${outputAttributes}")
+  ColumnarPluginConfig.getConf(sparkConf)
+  /////////////// Prepare ColumnarSorter //////////////
   var processedNumRows: Long = 0
   var sort_elapse: Long = 0
   var shuffle_elapse: Long = 0
   var total_elapse: Long = 0
   val inputBatchHolder = new ListBuffer[ColumnarBatch]()
+  var allocator = ArrowWritableColumnVector.getNewAllocator
   var nextVector: FieldVector = null
+  val keyFieldList: List[Field] = sortOrder.toList.map(sort => {
+    val attr = ConverterUtils.getAttrFromExpr(sort.child)
+    Field.nullable(s"${attr.name}#${attr.exprId.id}", CodeGeneration.getResultType(attr.dataType))
+  });
+  val outputFieldList: List[Field] = outputAttributes.toList.map(expr => {
+    val attr = ConverterUtils.getAttrFromExpr(expr)
+    Field.nullable(s"${attr.name}#${attr.exprId.id}", CodeGeneration.getResultType(attr.dataType))
+  })
+  val inputFieldList: List[Field] = outputFieldList
+
+  val sortFuncName = if (sortOrder.head.isAscending) {
+    "sortArraysToIndicesNullsFirstAsc"
+  } else {
+    "sortArraysToIndicesNullsFirstDesc"
+  }
+
+///////////////// Prepare Schema ////////////////
+  logInfo(s"inputFieldList is ${inputFieldList}, outputFieldList is ${outputFieldList}")
+  val arrowSchema = new Schema(inputFieldList.asJava)
   val resultSchema = StructType(
     outputAttributes
       .map(expr => {
@@ -74,13 +99,24 @@ class ColumnarSorter(
         StructField(s"${attr.name}", attr.dataType, true)
       })
       .toArray)
-  val outputFieldList: List[Field] = outputAttributes.toList.map(expr => {
-    val attr = ConverterUtils.getAttrFromExpr(expr)
-    Field
-      .nullable(s"${attr.name}#${attr.exprId.id}", CodeGeneration.getResultType(attr.dataType))
-  })
-  val arrowSchema = new Schema(outputFieldList.asJava)
+  val output_arrow_schema = new Schema(outputFieldList.asJava)
+  val indicesSchema = new Schema(
+    Lists.newArrayList(Field.nullable("indices", new ArrowType.FixedSizeBinary(16))))
+///////////////// prepare sort expression ////////////////
+  val retType = Field.nullable("res", new ArrowType.Int(32, true))
+  val sort_node = TreeBuilder.makeFunction(
+    sortFuncName,
+    keyFieldList.map(keyField => TreeBuilder.makeField(keyField)).asJava,
+    new ArrowType.Int(32, true))
+  val sort_expr = TreeBuilder.makeExpression(sort_node, retType)
   var sort_iterator: BatchIterator = _
+  var sorter = new ExpressionEvaluator()
+  sorter.build(
+    arrowSchema,
+    Lists.newArrayList(sort_expr),
+    indicesSchema,
+    true /*return at finish*/ )
+  /////////////////////////////////////////////////////
 
   def close(): Unit = {
     logInfo(s"Sort Closed, ${processedNumRows} rows, output ${outputRows} rows")
@@ -93,10 +129,15 @@ class ColumnarSorter(
     inputBatchHolder.foreach(cb => cb.close())
     if (sorter != null) {
       sorter.close()
+      sorter = null
     }
     if (sort_iterator != null) {
       sort_iterator.close()
       sort_iterator = null
+    }
+    if (allocator != null) {
+      allocator.close()
+      allocator = null
     }
   }
 
@@ -119,7 +160,7 @@ class ColumnarSorter(
       new ColumnarBatch(resultColumnVectors.map(_.asInstanceOf[ColumnVector]), 0)
     } else {
       val resultColumnVectorList =
-        ConverterUtils.fromArrowRecordBatch(arrowSchema, resultBatch)
+        ConverterUtils.fromArrowRecordBatch(output_arrow_schema, resultBatch)
       val length = resultBatch.getLength()
       ConverterUtils.releaseArrowRecordBatch(resultBatch)
       new ColumnarBatch(resultColumnVectorList.map(v => v.asInstanceOf[ColumnVector]), length)
@@ -170,114 +211,20 @@ class ColumnarSorter(
   }
 }
 
-object ColumnarSorter extends Logging {
-  var sort_expr: ExpressionTree = _
-  var outputAttributes: Seq[Attribute] = _
-  var arrowSchema: Schema = _
-  var sorter: ExpressionEvaluator = _
-
-  def init(
-      sortOrder: Seq[SortOrder],
-      outputAsColumnar: Boolean,
-      outputAttributes: Seq[Attribute],
-      _sortTime: SQLMetric,
-      _outputBatches: SQLMetric,
-      _outputRows: SQLMetric,
-      _shuffleTime: SQLMetric,
-      _elapse: SQLMetric,
-      _sparkConf: SparkConf): Unit = {
-
-    val sortTime = _sortTime
-    val outputBatches = _outputBatches
-    val outputRows = _outputRows
-    val shuffleTime = _shuffleTime
-    val elapse = _elapse
-    val sparkConf = _sparkConf
-
-    logInfo(s"ColumnarSorter sortOrder is ${sortOrder}, outputAttributes is ${outputAttributes}")
-    ColumnarPluginConfig.getConf(sparkConf)
-    /////////////// Prepare ColumnarSorter //////////////
-    val keyFieldList: List[Field] = sortOrder.toList.map(sort => {
-      val attr = ConverterUtils.getAttrFromExpr(sort.child)
-      Field
-        .nullable(s"${attr.name}#${attr.exprId.id}", CodeGeneration.getResultType(attr.dataType))
-    });
-    val outputFieldList: List[Field] = outputAttributes.toList.map(expr => {
-      val attr = ConverterUtils.getAttrFromExpr(expr)
-      Field
-        .nullable(s"${attr.name}#${attr.exprId.id}", CodeGeneration.getResultType(attr.dataType))
-    })
-
-    val sortFuncName = if (sortOrder.head.isAscending) {
-      "sortArraysToIndicesNullsFirstAsc"
-    } else {
-      "sortArraysToIndicesNullsFirstDesc"
-    }
-
-    arrowSchema = new Schema(outputFieldList.asJava)
-    ///////////////// prepare sort expression ////////////////
-    val retType = Field.nullable("res", new ArrowType.Int(32, true))
-    val sort_node = TreeBuilder.makeFunction(
-      sortFuncName,
-      keyFieldList.map(keyField => TreeBuilder.makeField(keyField)).asJava,
-      new ArrowType.Int(32, true))
-    sort_expr = TreeBuilder.makeExpression(sort_node, retType)
-    /////////////////////////////////////////////////////
-  }
-
-  def prebuild(
-      sortOrder: Seq[SortOrder],
-      outputAsColumnar: Boolean,
-      outputAttributes: Seq[Attribute],
-      sortTime: SQLMetric,
-      outputBatches: SQLMetric,
-      outputRows: SQLMetric,
-      shuffleTime: SQLMetric,
-      elapse: SQLMetric,
-      sparkConf: SparkConf): String = synchronized {
-    init(
-      sortOrder,
-      outputAsColumnar,
-      outputAttributes,
-      sortTime,
-      outputBatches,
-      outputRows,
-      shuffleTime,
-      elapse,
-      sparkConf)
-    sorter = new ExpressionEvaluator()
-    val signature = sorter
-      .build(arrowSchema, Lists.newArrayList(sort_expr), arrowSchema, true /*return at finish*/ )
-    sorter.close
-    signature
-  }
-
+object ColumnarSorter {
   def create(
       sortOrder: Seq[SortOrder],
       outputAsColumnar: Boolean,
       outputAttributes: Seq[Attribute],
-      listJars: Seq[String],
       sortTime: SQLMetric,
       outputBatches: SQLMetric,
       outputRows: SQLMetric,
       shuffleTime: SQLMetric,
       elapse: SQLMetric,
       sparkConf: SparkConf): ColumnarSorter = synchronized {
-    init(
+    new ColumnarSorter(
       sortOrder,
       outputAsColumnar,
-      outputAttributes,
-      sortTime,
-      outputBatches,
-      outputRows,
-      shuffleTime,
-      elapse,
-      sparkConf)
-    sorter = new ExpressionEvaluator(listJars.toList.asJava)
-    sorter
-      .build(arrowSchema, Lists.newArrayList(sort_expr), arrowSchema, true /*return at finish*/ )
-    new ColumnarSorter(
-      sorter,
       outputAttributes,
       sortTime,
       outputBatches,

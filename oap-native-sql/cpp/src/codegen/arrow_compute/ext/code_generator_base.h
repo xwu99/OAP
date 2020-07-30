@@ -16,6 +16,12 @@
  */
 
 #pragma once
+#include <arrow/array.h>
+#include <arrow/type.h>
+
+#include <memory>
+#include <vector>
+
 #include "codegen/common/result_iterator.h"
 
 namespace sparkcolumnarplugin {

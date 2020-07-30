@@ -24,9 +24,9 @@ import com.google.common.annotations.VisibleForTesting
 import com.google.common.io.Closeables
 import com.intel.oap.vectorized.{
   ArrowWritableColumnVector,
-  ShuffleSplitterJniWrapper,
-  SplitResult
+  ShuffleSplitterJniWrapper
 }
+
 import org.apache.arrow.util.SchemaUtils
 import org.apache.arrow.vector.types.pojo.Schema
 import org.apache.spark._
@@ -67,8 +67,6 @@ class ColumnarShuffleWriter[K, V](
   private val jniWrapper = new ShuffleSplitterJniWrapper()
 
   private var nativeSplitter: Long = 0
-
-  private var splitResult: SplitResult = _
 
   private var partitionLengths: Array[Long] = _
 
@@ -117,9 +115,9 @@ class ColumnarShuffleWriter[K, V](
     }
 
     val startTime = System.nanoTime()
-    splitResult = jniWrapper.stop(nativeSplitter)
-    dep.splitTime.add(System.nanoTime() - startTime - splitResult.getTotalWriteTime)
-    writeMetrics.incBytesWritten(splitResult.getTotalBytesWritten)
+    jniWrapper.stop(nativeSplitter)
+    dep.splitTime.add(System.nanoTime() - startTime)
+    writeMetrics.incBytesWritten(jniWrapper.getTotalBytesWritten(nativeSplitter))
 
     val output = shuffleBlockResolver.getDataFile(dep.shuffleId, mapId)
     val tmp = Utils.tempFileWith(output)
@@ -150,7 +148,7 @@ class ColumnarShuffleWriter[K, V](
       // delete the temporary files hold by native splitter
       if (nativeSplitter != 0) {
         try {
-          splitResult.getPartitionFileInfo.foreach { fileInfo =>
+          jniWrapper.getPartitionFileInfo(nativeSplitter).foreach { fileInfo =>
             {
               val pid = fileInfo.getPid
               val file = new File(fileInfo.getFilePath)
@@ -178,7 +176,7 @@ class ColumnarShuffleWriter[K, V](
     var threwException = true
 
     try {
-      splitResult.getPartitionFileInfo.foreach { fileInfo =>
+      jniWrapper.getPartitionFileInfo(nativeSplitter).foreach { fileInfo =>
         {
           val pid = fileInfo.getPid
           val filePath = fileInfo.getFilePath
@@ -208,12 +206,7 @@ class ColumnarShuffleWriter[K, V](
       threwException = false
     } finally {
       Closeables.close(out, threwException)
-      val writeTime = System.nanoTime - writerStartTime + splitResult.getTotalWriteTime
-      writeMetrics.incWriteTime(writeTime)
-
-      // merge into total time
-      dep.totalTime.add(writeTime)
-      dep.totalTime.merge(dep.splitTime)
+      writeMetrics.incWriteTime(System.nanoTime - writerStartTime)
     }
     lengths
   }

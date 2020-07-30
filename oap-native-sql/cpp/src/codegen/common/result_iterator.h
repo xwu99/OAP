@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include <arrow/array.h>
 #include <arrow/status.h>
 #include <arrow/type_fwd.h>
 

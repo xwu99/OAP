@@ -70,6 +70,4 @@ object OneDAL {
   }
 
   @native def setNumericTableValue(numTableAddr: Long, rowIndex: Int, colIndex: Int, value: Double)
-  
-  @native def cSetDoubleIterator(numTableAddr: Long, iter: java.util.Iterator[DataBatch])
 }

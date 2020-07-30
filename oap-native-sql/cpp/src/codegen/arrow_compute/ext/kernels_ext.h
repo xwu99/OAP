@@ -62,7 +62,6 @@ class KernalBase {
                                          kernel_name_,
                                          ", input is array, output is array.");
   }
-  virtual std::string GetSignature() { return ""; }
   virtual arrow::Status Finish(ArrayList* out) {
     return arrow::Status::NotImplemented("Finish is abstract interface for ",
                                          kernel_name_, ", output is arrayList");
@@ -239,7 +238,6 @@ class SortArraysToIndicesKernel : public KernalBase {
   arrow::Status MakeResultIterator(
       std::shared_ptr<arrow::Schema> schema,
       std::shared_ptr<ResultIterator<arrow::RecordBatch>>* out) override;
-  std::string GetSignature() override;
 
   class Impl;
 
@@ -263,7 +261,6 @@ class HashAggregateKernel : public KernalBase {
   arrow::Status MakeResultIterator(
       std::shared_ptr<arrow::Schema> schema,
       std::shared_ptr<ResultIterator<arrow::RecordBatch>>* out) override;
-  std::string GetSignature() override;
 
   class Impl;
 
@@ -309,7 +306,6 @@ class ConditionedProbeArraysKernel : public KernalBase {
   arrow::Status MakeResultIterator(
       std::shared_ptr<arrow::Schema> schema,
       std::shared_ptr<ResultIterator<arrow::RecordBatch>>* out) override;
-  std::string GetSignature() override;
   class Impl;
 
  private:

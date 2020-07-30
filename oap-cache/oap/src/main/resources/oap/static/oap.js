@@ -259,10 +259,8 @@ $(document).ready(function () {
                             },
                             {
                                 data: function (row, type) {
-                                    return type === 'display' ? (((row.dataFiberHitCount * 100
-                                        / (row.dataFiberHitCount + row.dataFiberMissCount)).toFixed(2)) === 'NaN' ?
-                                        '0' : (row.dataFiberHitCount * 100 / (row.dataFiberHitCount +
-                                        row.dataFiberMissCount)).toFixed(2))
+                                    return type === 'display' ? (row.dataFiberHitCount * 100
+                                        / (row.dataFiberHitCount + row.dataFiberMissCount)).toFixed(2)
                                         + '% (' + formatCount(row.dataFiberHitCount, type) + '/'
                                         + formatCount(row.dataFiberMissCount, type) + ')' : 'Nan'
                                 }
@@ -276,9 +274,7 @@ $(document).ready(function () {
                             {
                                 data: function (row, type) {
                                     return type === 'display' ?
-                                        (formatDuration((row.dataTotalLoadTime / 1000000 / row.dataFiberLoadCount).toFixed(2))
-                                         === 'NaN h' ? '0': formatDuration((row.dataTotalLoadTime / 1000000 /
-                                         row.dataFiberLoadCount).toFixed(2))): 'Nan'
+                                        formatDuration((row.dataTotalLoadTime / 1000000 / row.dataFiberLoadCount).toFixed(2)) : 'Nan'
                                 }
                             },
                             {
@@ -289,10 +285,8 @@ $(document).ready(function () {
                             },
                             {
                                 data: function (row, type) {
-                                    return type === 'display' ? (((row.indexFiberHitCount * 100
-                                        / (row.indexFiberHitCount + row.indexFiberMissCount)).toFixed(2)) === 'NaN' ?
-                                        '0' : (row.indexFiberHitCount * 100 / (row.indexFiberHitCount +
-                                        row.indexFiberMissCount)).toFixed(2))
+                                    return type === 'display' ? (row.indexFiberHitCount * 100
+                                        / (row.indexFiberHitCount + row.indexFiberMissCount)).toFixed(2)
                                         + '% (' + formatCount(row.indexFiberHitCount, type) + '/'
                                         + formatCount(row.indexFiberMissCount, type) + ')' : 'Nan'
                                 }
@@ -306,9 +300,7 @@ $(document).ready(function () {
                             {
                                 data: function (row, type) {
                                     return type === 'display' ?
-                                        (formatDuration((row.indexTotalLoadTime / 1000000 / row.indexFiberLoadCount).toFixed(2))
-                                         === 'NaN h' ? '0' : formatDuration((row.indexTotalLoadTime / 1000000 /
-                                         row.indexFiberLoadCount).toFixed(2))): 'Nan'
+                                        formatDuration((row.indexTotalLoadTime / 1000000 / row.indexFiberLoadCount).toFixed(2)) : 'Nan'
                                 }
                             },
                             {
@@ -322,7 +314,6 @@ $(document).ready(function () {
                     };
 
                     $(selector).DataTable(conf);
-                    $("#cache-separation-active-cms-table tr:not(:first):first").remove();
                     $('#active-cms [data-toggle="tooltip"]').tooltip();
 
                     var sumSelector = "#cache-separation-summary-cms-table";
@@ -361,10 +352,8 @@ $(document).ready(function () {
                             },
                             {
                                 data: function (row, type) {
-                                    return type === 'display' ? (((row.allDataFiberHitCount * 100
-                                        / (row.allDataFiberHitCount + row.allDataFiberMissCount)).toFixed(2)) === 'NaN' ?
-                                        '0' : (row.allDataFiberHitCount * 100 / (row.allDataFiberHitCount +
-                                         row.allDataFiberMissCount)).toFixed(2))
+                                    return type === 'display' ? (row.allDataFiberHitCount * 100
+                                        / (row.allDataFiberHitCount + row.allDataFiberMissCount)).toFixed(2)
                                         + '% (' + formatCount(row.allDataFiberHitCount, type) + '/'
                                         + formatCount(row.allDataFiberMissCount, type) + ')' : 'Nan'
                                 }
@@ -378,9 +367,7 @@ $(document).ready(function () {
                             {
                                 data: function (row, type) {
                                     return type === 'display' ?
-                                        (formatDuration((row.allDataLoadTime / 1000000 / row.allDataFiberLoadCount).toFixed(2))
-                                        === 'NaN h' ? '0' : formatDuration((row.allDataLoadTime / 1000000 /
-                                        row.allDataFiberLoadCount).toFixed(2))) : 'Nan'
+                                        formatDuration((row.allDataLoadTime / 1000000 / row.allDataFiberLoadCount).toFixed(2)) : 'Nan'
                                 }
                             },
                             {
@@ -391,10 +378,8 @@ $(document).ready(function () {
                             },
                             {
                                 data: function (row, type) {
-                                    return type === 'display' ? (((row.allIndexFiberHitCount * 100
-                                        / (row.allIndexFiberHitCount + row.allIndexFiberMissCount)).toFixed(2)) === 'NaN' ?
-                                        '0' : (row.allIndexFiberHitCount * 100  / (row.allIndexFiberHitCount +
-                                         row.allIndexFiberMissCount)).toFixed(2))
+                                    return type === 'display' ? (row.allIndexFiberHitCount * 100
+                                        / (row.allIndexFiberHitCount + row.allIndexFiberMissCount)).toFixed(2)
                                         + '% (' + formatCount(row.allIndexFiberHitCount, type) + '/'
                                         + formatCount(row.allIndexFiberMissCount, type) + ')' : 'Nan'
                                 }
@@ -408,9 +393,7 @@ $(document).ready(function () {
                             {
                                 data: function (row, type) {
                                     return type === 'display' ?
-                                        (formatDuration((row.allIndexLoadTime / 1000000 / row.allIndexFiberLoadCount).toFixed(2))
-                                        === 'NaN h' ? '0': formatDuration((row.allIndexLoadTime / 1000000 /
-                                         row.allIndexFiberLoadCount).toFixed(2))) : 'Nan'
+                                        formatDuration((row.allIndexLoadTime / 1000000 / row.allIndexFiberLoadCount).toFixed(2)) : 'Nan'
                                 }
                             },
                             {
@@ -479,10 +462,8 @@ $(document).ready(function () {
                             },
                             {
                                 data: function (row, type) {
-                                    return type === 'display' ? (((row.dataFiberHitCount * 100
-                                        / (row.dataFiberHitCount + row.dataFiberMissCount)).toFixed(2)) === 'NaN' ?
-                                        '0' : (row.dataFiberHitCount * 100  / (row.dataFiberHitCount +
-                                         row.dataFiberMissCount)).toFixed(2))
+                                    return type === 'display' ? (row.dataFiberHitCount * 100
+                                        / (row.dataFiberHitCount + row.dataFiberMissCount)).toFixed(2)
                                         + '% (' + formatCount(row.dataFiberHitCount, type) + '/'
                                         + formatCount(row.dataFiberMissCount, type) + ')' : 'Nan'
                                 }
@@ -491,9 +472,7 @@ $(document).ready(function () {
                             {
                                 data: function (row, type) {
                                     return type === 'display' ?
-                                        (formatDuration((row.dataTotalLoadTime / 1000000 / row.dataFiberLoadCount).toFixed(2))
-                                         === 'NaN h' ? '0': formatDuration((row.dataTotalLoadTime / 1000000 /
-                                          row.dataFiberLoadCount).toFixed(2))): 'Nan'
+                                        formatDuration((row.dataTotalLoadTime / 1000000 / row.dataFiberLoadCount).toFixed(2)) : 'Nan'
                                 }
                             },
                             {data: 'dataEvictionCount', render: formatCount}
@@ -502,7 +481,6 @@ $(document).ready(function () {
                     };
 
                     $(selector).DataTable(conf);
-                    $("#active-cms-table tr:not(:first):first").remove();
                     $('#active-cms [data-toggle="tooltip"]').tooltip();
 
                     var sumSelector = "#summary-cms-table";
@@ -553,10 +531,8 @@ $(document).ready(function () {
                             },
                             {
                                 data: function (row, type) {
-                                    return type === 'display' ? (((row.allDataFiberHitCount * 100
-                                        / (row.allDataFiberHitCount + row.allDataFiberMissCount)).toFixed(2)) === 'NaN' ?
-                                        '0' : (row.allDataFiberHitCount * 100 / (row.allDataFiberHitCount +
-                                        row.allDataFiberMissCount)).toFixed(2))
+                                    return type === 'display' ? (row.allDataFiberHitCount * 100
+                                        / (row.allDataFiberHitCount + row.allDataFiberMissCount)).toFixed(2)
                                         + '% (' + formatCount(row.allDataFiberHitCount, type) + '/'
                                         + formatCount(row.allDataFiberMissCount, type) + ')' : 'Nan'
                                 }
@@ -565,9 +541,7 @@ $(document).ready(function () {
                             {
                                 data: function (row, type) {
                                     return type === 'display' ?
-                                        (formatDuration((row.allDataLoadTime / 1000000 / row.allDataFiberLoadCount).toFixed(2))
-                                         === 'NaN h' ? '0' : formatDuration((row.allDataLoadTime / 1000000 /
-                                         row.allDataFiberLoadCount).toFixed(2))) : 'Nan'
+                                        formatDuration((row.allDataLoadTime / 1000000 / row.allDataFiberLoadCount).toFixed(2)) : 'Nan'
                                 }
                             },
                             {data: "allDataEvictionCount", render: formatCount}

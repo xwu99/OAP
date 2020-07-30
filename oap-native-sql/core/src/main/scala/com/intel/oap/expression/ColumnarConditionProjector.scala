@@ -56,7 +56,6 @@ class ColumnarConditionProjector(
   procTime: SQLMetric)
   extends Logging {
   logInfo(s"originalInputAttributes is ${originalInputAttributes}, \nCondition is ${condExpr}, \nProjection is ${projectList}")
-  var proc_time :Long = 0
   var elapseTime_make: Long = 0
   val start_make: Long = System.nanoTime()
   var skip = false
@@ -183,7 +182,6 @@ class ColumnarConditionProjector(
     if (projector != null) {
       projector.close()
     }
-    procTime.set(proc_time)
   }
 
   def createIterator(cbIterator: Iterator[ColumnarBatch]): Iterator[ColumnarBatch] = {
@@ -197,8 +195,7 @@ class ColumnarConditionProjector(
           return true
         }
         nextCalled = false
-        var beforeEval: Long = 0
-        var afterEval: Long = 0
+        val beforeEval: Long = System.nanoTime()
         var numRows = 0
         var input : ArrowRecordBatch = null
         var selectionVector : SelectionVectorInt16 = null
@@ -212,7 +209,7 @@ class ColumnarConditionProjector(
             logInfo(s"has no next, return false")
             return false
           }
-          beforeEval = System.nanoTime()
+
           numRows = columnarBatch.numRows()
           if (numRows > 0) {
             if (skip == true){
@@ -233,8 +230,6 @@ class ColumnarConditionProjector(
               val cols = conditionOrdinalList.map(i => {
                 columnarBatch.column(i).asInstanceOf[ArrowWritableColumnVector].getValueVector()
               })
-              afterEval = System.nanoTime()
-              proc_time += ((System.nanoTime() - beforeEval) / (1000 * 1000))
               input = ConverterUtils.createArrowRecordBatch(numRows, cols)
               conditioner.evaluate(input, selectionVector)
               ConverterUtils.releaseArrowRecordBatch(input)
@@ -254,7 +249,6 @@ class ColumnarConditionProjector(
   
         // for now, we either filter one columnarBatch who has valid rows or we only need to do project
         // either scenario we will need to output one columnarBatch.
-        beforeEval = System.nanoTime()
         val resultColumnVectors = ArrowWritableColumnVector.allocateColumns(numRows, resultSchema).toArray
         val outputVectors = resultColumnVectors.map(columnVector => {
           columnVector.getValueVector()
@@ -272,7 +266,7 @@ class ColumnarConditionProjector(
   
         ConverterUtils.releaseArrowRecordBatch(input)
         val outputBatch = new ColumnarBatch(resultColumnVectors.map(_.asInstanceOf[ColumnVector]), numRows)
-        proc_time += ((System.nanoTime() - beforeEval) / (1000 * 1000))
+        procTime += ((System.nanoTime() - beforeEval) / (1000 * 1000))
         resColumnarBatch = outputBatch
         true
       }
