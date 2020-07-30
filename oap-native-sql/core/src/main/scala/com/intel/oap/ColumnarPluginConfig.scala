@@ -24,6 +24,8 @@ class ColumnarPluginConfig(conf: SparkConf) {
     conf.getBoolean("spark.sql.columnar.sort", defaultValue = false)
   val enableCodegenHashAggregate: Boolean =
     conf.getBoolean("spark.sql.columnar.codegen.hashAggregate", defaultValue = false)
+  val enableColumnarBroadcastJoin: Boolean =
+    conf.getBoolean("spark.sql.columnar.sort.broadcastJoin", defaultValue = true)
   val enableColumnarShuffle: Boolean = conf
     .get("spark.shuffle.manager", "sort")
     .equals("org.apache.spark.shuffle.sort.ColumnarShuffleManager")
@@ -35,6 +37,7 @@ class ColumnarPluginConfig(conf: SparkConf) {
 
 object ColumnarPluginConfig {
   var ins: ColumnarPluginConfig = null
+  var random_temp_dir_path: String = null
   def getConf(conf: SparkConf): ColumnarPluginConfig = synchronized {
     if (ins == null) {
       ins = new ColumnarPluginConfig(conf)
@@ -58,10 +61,16 @@ object ColumnarPluginConfig {
     }
   }
   def getTempFile: String = synchronized {
-    if (ins != null) {
+    if (ins != null && ins.tmpFile != null) {
       ins.tmpFile
     } else {
       System.getProperty("java.io.tmpdir")
     }
+  }
+  def setRandomTempDir(path: String) = synchronized {
+    random_temp_dir_path = path
+  }
+  def getRandomTempDir = synchronized {
+    random_temp_dir_path
   }
 }

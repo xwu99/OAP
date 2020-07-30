@@ -17,6 +17,10 @@
 
 package com.intel.oap
 
+import java.util.Locale
+
+import java.io.{File, BufferedReader, InputStreamReader};
+import java.nio.file.Files;
 import com.intel.oap.execution._
 
 import org.apache.spark.SparkConf
@@ -30,10 +34,15 @@ import org.apache.spark.sql.execution.adaptive.{
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.aggregate.HashAggregateExec
 import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
-import org.apache.spark.sql.execution.exchange.{ReusedExchangeExec, ShuffleExchangeExec}
-import org.apache.spark.sql.execution.joins.ShuffledHashJoinExec
+import org.apache.spark.sql.execution.exchange.{
+  BroadcastExchangeExec,
+  ReusedExchangeExec,
+  ShuffleExchangeExec
+}
+import org.apache.spark.sql.execution.joins.{BroadcastHashJoinExec, ShuffledHashJoinExec}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.{SparkSession, SparkSessionExtensions}
+import java.io.IOException
 
 case class ColumnarPreOverrides(conf: SparkConf) extends Rule[SparkPlan] {
   val columnarConf = ColumnarPluginConfig.getConf(conf)
@@ -118,6 +127,37 @@ case class ColumnarPreOverrides(conf: SparkConf) extends Rule[SparkPlan] {
         left,
         right)
       res
+
+    case plan: BroadcastHashJoinExec =>
+      if (columnarConf.enableColumnarBroadcastJoin) {
+        val left = if (plan.left.isInstanceOf[BroadcastExchangeExec]) {
+          val child = plan.left.asInstanceOf[BroadcastExchangeExec]
+          new ColumnarBroadcastExchangeExec(child.mode, replaceWithColumnarPlan(child.child))
+        } else {
+          replaceWithColumnarPlan(plan.left)
+        }
+        val right = if (plan.right.isInstanceOf[BroadcastExchangeExec]) {
+          val child = plan.right.asInstanceOf[BroadcastExchangeExec]
+          new ColumnarBroadcastExchangeExec(child.mode, replaceWithColumnarPlan(child.child))
+        } else {
+          replaceWithColumnarPlan(plan.right)
+        }
+        logDebug(s"Columnar Processing for ${plan.getClass} is currently supported.")
+        val res = new ColumnarBroadcastHashJoinExec(
+          plan.leftKeys,
+          plan.rightKeys,
+          plan.joinType,
+          plan.buildSide,
+          plan.condition,
+          left,
+          right)
+        res
+      } else {
+        val children = plan.children.map(replaceWithColumnarPlan)
+        logDebug(s"Columnar Processing for ${plan.getClass} is not currently supported.")
+        plan.withNewChildren(children)
+      }
+
     case plan: ShuffleQueryStageExec if columnarConf.enableColumnarShuffle =>
       // To catch the case when AQE enabled and there's no wrapped CustomShuffleReaderExec,
       // and don't call replaceWithColumnarPlan because ShuffleQueryStageExec is a leaf node
@@ -169,6 +209,7 @@ case class ColumnarPostOverrides(conf: SparkConf) extends Rule[SparkPlan] {
   def apply(plan: SparkPlan): SparkPlan = {
     replaceWithColumnarPlan(plan)
   }
+
 }
 
 case class ColumnarOverrideRules(session: SparkSession) extends ColumnarRule with Logging {
@@ -193,6 +234,7 @@ case class ColumnarOverrideRules(session: SparkSession) extends ColumnarRule wit
       plan
     }
   }
+
 }
 
 /**
