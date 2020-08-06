@@ -73,7 +73,7 @@ We use [Apache Maven](https://maven.apache.org/) to manage and build source code
     - Threading Building Blocks (oneTBB)
 * [Open Source Intel® oneAPI Collective Communications Library (oneCCL)](https://github.com/oneapi-src/oneCCL)
 
-Intel® oneAPI Toolkits (Beta) and its components can be downloaded and install from [here](https://software.intel.com/content/www/us/en/develop/tools/oneapi.html). Installation process for oneAPI using Package Managers (YUM (DNF), APT, and ZYPPER) is also available from here. Generally you only need to install oneAPI Base Toolkit for Linux with all or selected components. Instead of using oneCCL included in Intel® oneAPI Toolkits (Beta), we prefer to build from open source oneCCL to resolve some bugs.
+Intel® oneAPI Toolkits (Beta) and its components can be downloaded and install from [here](https://software.intel.com/content/www/us/en/develop/tools/oneapi.html). Installation process for oneAPI using Package Managers (YUM (DNF), APT, and ZYPPER) is also available. Generally you only need to install oneAPI Base Toolkit for Linux with all or selected components mentioned above. Instead of using oneCCL included in Intel® oneAPI Toolkits (Beta), we prefer to build from open source oneCCL to resolve some bugs.
 
 More details abount oneAPI can be found [here](https://software.intel.com/content/www/us/en/develop/tools/oneapi.html).
 
