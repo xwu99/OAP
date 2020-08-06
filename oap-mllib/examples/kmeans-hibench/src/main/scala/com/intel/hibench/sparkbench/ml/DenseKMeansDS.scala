@@ -48,7 +48,7 @@ object DenseKMeansDS {
   case class Params(input: String = null,
                     k: Int = -1,
                     numIterations: Int = 10,
-                    initializationMode: InitializationMode = Parallel)
+                    initializationMode: InitializationMode = Random)
 
   def main(args: Array[String]) {
     val defaultParams = Params()
