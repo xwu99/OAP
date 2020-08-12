@@ -35,13 +35,6 @@
         </dependency>
 
         <dependency>
-            <groupId>com.github.fommil.netlib</groupId>
-            <artifactId>all</artifactId>
-            <version>1.1.2</version>
-            <type>pom</type>
-        </dependency>
-
-        <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-sql_2.12</artifactId>
             <version>${spark.version}</version>
@@ -67,9 +60,9 @@
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
             <version>4.12</version>
-            <scope>test</scope>     
+            <scope>test</scope>
         </dependency>
-             
+
         <dependency>
             <groupId>org.scalatest</groupId>
             <artifactId>scalatest_2.12</artifactId>
