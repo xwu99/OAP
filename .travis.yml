@@ -122,6 +122,7 @@ jobs:
       - source $ONEAPI_ROOT/tbb/2021.1-beta08/env/vars.sh
       - source /tmp/oneCCL/build/_install/env/setvars.sh
       - ./build.sh
+      - cd ${TRAVIS_BUILD_DIR}/oap-mllib
       - ./travis/run-kmeans-pyspark.sh
 
     - name: oap-spark
