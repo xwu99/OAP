@@ -57,7 +57,7 @@ class ColumnarSortExec(
     "sortTime" -> SQLMetrics.createTimingMetric(sparkContext, "time in sort process"),
     "shuffleTime" -> SQLMetrics.createTimingMetric(sparkContext, "time in shuffle process"),
     "numOutputRows" -> SQLMetrics.createMetric(sparkContext, "number of output rows"),
-    "numOutputBatches" -> SQLMetrics.createMetric(sparkContext, "number of output batches"))
+    "numOutputBatches" -> SQLMetrics.createMetric(sparkContext, "output_batches"))
 
   val elapse = longMetric("totalSortTime")
   val sortTime = longMetric("sortTime")
@@ -134,5 +134,13 @@ class ColumnarSortExec(
       }
       res
     }
+  }
+
+  override def canEqual(other: Any): Boolean = other.isInstanceOf[ColumnarSortExec]
+
+  override def equals(other: Any): Boolean = other match {
+    case that: ColumnarSortExec =>
+      (that canEqual this) && super.equals(that)
+    case _ => false
   }
 }

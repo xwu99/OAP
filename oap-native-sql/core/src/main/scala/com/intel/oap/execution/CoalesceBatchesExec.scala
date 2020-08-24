@@ -17,8 +17,6 @@
 
 package com.intel.oap.execution
 
-import java.util.concurrent.TimeUnit
-
 import com.intel.oap.vectorized.ArrowWritableColumnVector
 import org.apache.arrow.vector.util.VectorBatchAppender
 import org.apache.spark.TaskContext
@@ -42,9 +40,9 @@ case class CoalesceBatchesExec(child: SparkPlan) extends UnaryExecNode {
   override protected def doExecute(): RDD[InternalRow] = throw new UnsupportedOperationException
 
   override lazy val metrics: Map[String, SQLMetric] = Map(
-    "numInputRows" -> SQLMetrics.createMetric(sparkContext, "number of input rows"),
-    "numInputBatches" -> SQLMetrics.createMetric(sparkContext, "number of input batches"),
-    "numOutputBatches" -> SQLMetrics.createMetric(sparkContext, "number of output batches"),
+    "numOutputRows" -> SQLMetrics.createMetric(sparkContext, "number of output rows"),
+    "numInputBatches" -> SQLMetrics.createMetric(sparkContext, "input_batches"),
+    "numOutputBatches" -> SQLMetrics.createMetric(sparkContext, "output_batches"),
     "concatTime" -> SQLMetrics.createNanoTimingMetric(sparkContext, "totaltime_coalescebatch"),
     "avgCoalescedNumRows" -> SQLMetrics
       .createAverageMetric(sparkContext, "avg coalesced batch num rows"))
@@ -53,7 +51,7 @@ case class CoalesceBatchesExec(child: SparkPlan) extends UnaryExecNode {
     import CoalesceBatchesExec._
 
     val recordsPerBatch = conf.arrowMaxRecordsPerBatch
-    val numInputRows = longMetric("numInputRows")
+    val numOutputRows = longMetric("numOutputRows")
     val numInputBatches = longMetric("numInputBatches")
     val numOutputBatches = longMetric("numOutputBatches")
     val concatTime = longMetric("concatTime")
@@ -105,7 +103,7 @@ case class CoalesceBatchesExec(child: SparkPlan) extends UnaryExecNode {
             target.setNumRows(rowCount)
 
             concatTime += System.nanoTime - beforeConcat
-            numInputRows += rowCount
+            numOutputRows += rowCount
             numInputBatches += (1 + batchesToAppend.length)
             numOutputBatches += 1
 

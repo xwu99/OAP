@@ -28,14 +28,6 @@ import org.apache.spark.sql._
 import scopt.OptionParser
 import org.apache.spark.sql.SparkSession
 
-/**
-  *
-  * An example k-means app. Run with
-  * {{{
-  * ./bin/run-example org.apache.spark.examples.mllib.DenseKMeans [options] <input>
-  * }}}
-  * If you use it as a template to create your own app, please use `spark-submit` to submit your app.
-  */
 object DenseKMeansDS {
 
   object InitializationMode extends Enumeration {
@@ -48,7 +40,7 @@ object DenseKMeansDS {
   case class Params(input: String = null,
                     k: Int = -1,
                     numIterations: Int = 10,
-                    initializationMode: InitializationMode = Parallel)
+                    initializationMode: InitializationMode = Random)
 
   def main(args: Array[String]) {
     val defaultParams = Params()
@@ -95,11 +87,7 @@ object DenseKMeansDS {
       var vector: Array[Double] = new Array[Double](v.get().size)
       for (i <- 0 until v.get().size) vector(i) = v.get().get(i)
       Tuple1(Vectors.dense(vector))
-    }.toDF("features")
-
-    val numExamples = dataset.count()
-
-    println(s"numExamples = $numExamples.")
+    }.toDF("features")    
 
     val initMode = params.initializationMode match {
       case Random => "random"
@@ -111,12 +99,9 @@ object DenseKMeansDS {
       .setK(params.k)
       .setMaxIter(params.numIterations)
       .setSeed(1L)
-      .fit(dataset)
-
-    val cost = model.summary.trainingCost
-
-    println(s"Total cost = $cost.")
+      .fit(dataset)    
 
     spark.stop()
   }
 }
+

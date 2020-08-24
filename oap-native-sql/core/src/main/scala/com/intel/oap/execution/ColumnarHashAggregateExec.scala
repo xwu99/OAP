@@ -77,8 +77,8 @@ class ColumnarHashAggregateExec(
 
   override lazy val metrics = Map(
     "numOutputRows" -> SQLMetrics.createMetric(sparkContext, "number of output rows"),
-    "numOutputBatches" -> SQLMetrics.createMetric(sparkContext, "number of output batches"),
-    "numInputBatches" -> SQLMetrics.createMetric(sparkContext, "number of Input batches"),
+    "numOutputBatches" -> SQLMetrics.createMetric(sparkContext, "output_batches"),
+    "numInputBatches" -> SQLMetrics.createMetric(sparkContext, "input_batches"),
     "aggTime" -> SQLMetrics.createTimingMetric(sparkContext, "time in aggregation process"),
     "totalTime" -> SQLMetrics
       .createTimingMetric(sparkContext, "totaltime_hashagg"))
@@ -96,19 +96,28 @@ class ColumnarHashAggregateExec(
     if (ColumnarPluginConfig
           .getConf(sparkConf)
           .enableCodegenHashAggregate && groupingExpressions.nonEmpty) {
-      val signature = ColumnarGroupbyHashAggregation.prebuild(
-        groupingExpressions,
-        child.output,
-        aggregateExpressions,
-        aggregateAttributes,
-        resultExpressions,
-        output,
-        numInputBatches,
-        numOutputBatches,
-        numOutputRows,
-        aggTime,
-        totalTime,
-        sparkConf)
+      var signature: String = ""
+      try {
+        signature = ColumnarGroupbyHashAggregation.prebuild(
+          groupingExpressions,
+          child.output,
+          aggregateExpressions,
+          aggregateAttributes,
+          resultExpressions,
+          output,
+          numInputBatches,
+          numOutputBatches,
+          numOutputRows,
+          aggTime,
+          totalTime,
+          sparkConf)
+      } catch {
+        case e: UnsupportedOperationException
+            if e.getMessage == "Unsupport to generate native expression from replaceable expression." =>
+          logWarning(e.getMessage())
+        case e =>
+          throw e
+      }
       if (signature != "") {
         if (sparkContext.listJars.filter(path => path.contains(s"${signature}.jar")).isEmpty) {
           val tempDir = ColumnarPluginConfig.getRandomTempDir
@@ -139,7 +148,7 @@ class ColumnarHashAggregateExec(
           val execTempDir = ColumnarPluginConfig.getTempFile
           val jarList = listJars
             .map(jarUrl => {
-              logWarning(s"Get Codegened library Jar ${jarUrl}")
+              logInfo(s"HashAggregate Get Codegened library Jar ${jarUrl}")
               UserAddedJarUtils.fetchJarFromSpark(
                 jarUrl,
                 execTempDir,
@@ -194,4 +203,11 @@ class ColumnarHashAggregateExec(
     }
   }
 
+  override def canEqual(other: Any): Boolean = other.isInstanceOf[ColumnarHashAggregateExec]
+
+  override def equals(other: Any): Boolean = other match {
+    case that: ColumnarHashAggregateExec =>
+      (that canEqual this) && super.equals(that)
+    case _ => false
+  }
 }

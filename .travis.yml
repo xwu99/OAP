@@ -116,8 +116,10 @@ jobs:
       - sudo ./travis/setup-cluster.sh
       before_script:
       script:
-      - cd ${TRAVIS_BUILD_DIR}/oap-mllib/mllib-dal
-      - source /opt/intel/oneapi/setvars.sh
+      - cd ${TRAVIS_BUILD_DIR}/oap-mllib/mllib-dal      
+      - export ONEAPI_ROOT=/opt/intel/oneapi
+      - source $ONEAPI_ROOT/daal/2021.1-beta08/env/vars.sh
+      - source $ONEAPI_ROOT/tbb/2021.1-beta08/env/vars.sh
       - source /tmp/oneCCL/build/_install/env/setvars.sh
       - ./build.sh
 

@@ -71,5 +71,12 @@ object OneDAL {
 
   @native def setNumericTableValue(numTableAddr: Long, rowIndex: Int, colIndex: Int, value: Double)
   
-  @native def cSetDoubleIterator(numTableAddr: Long, iter: java.util.Iterator[DataBatch])
+
+  @native def cAddNumericTable(cObject: Long, numericTableAddr: Long)
+
+  @native def cSetDoubleBatch(numTableAddr: Long, curRows: Int, batch: Array[Double], numRows: Int, numCols: Int)
+ 
+  @native def cSetDoubleIterator(numTableAddr: Long, iter: java.util.Iterator[DataBatch], curRows: Int)
+  
+  @native def cFreeDataMemory(numTableAddr: Long)
 }
