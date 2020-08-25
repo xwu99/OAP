@@ -11,8 +11,8 @@ export HDFS_ROOT=hdfs://localhost:8020
 export OAP_MLLIB_ROOT=${TRAVIS_BUILD_DIR}/oap-mllib
 
 # Data file is from Spark Examples (data/mllib/sample_kmeans_data.txt), the data file should be copied to HDFS
-$HADOOP_HOME/bin/hadoop fs -mkdir /data
-$HADOOP_HOME/bin/hadoop fs -copyFromLocal $SPARK_HOME/data/mllib/sample_kmeans_data.txt /data
+$HADOOP_HOME/bin/hadoop fs -mkdir -p /user/travis/data
+$HADOOP_HOME/bin/hadoop fs -copyFromLocal $SPARK_HOME/data/mllib/sample_kmeans_data.txt /user/travis/data
 
 # == User to customize Spark executor cores and memory == #
 
@@ -50,7 +50,7 @@ SPARK_DRIVER_CLASSPATH=$OAP_MLLIB_JAR
 SPARK_EXECUTOR_CLASSPATH=./$OAP_MLLIB_JAR_NAME
 
 APP_PY="$OAP_MLLIB_ROOT/examples/kmeans-pyspark/kmeans-pyspark.py"
-DATA_FILE=/data/sample_kmeans_data.txt
+DATA_FILE=/user/travis/data/sample_kmeans_data.txt
 
 $SPARK_HOME/bin/spark-submit --master $SPARK_MASTER -v \
     --num-executors $SPARK_NUM_EXECUTORS \
