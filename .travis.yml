@@ -114,6 +114,7 @@ jobs:
       install:
       - cd ${TRAVIS_BUILD_DIR}/oap-mllib
       - sudo ./travis/setup-cluster.sh
+      - sudo pip3 install numpy
       before_script:
       script:
       - cd ${TRAVIS_BUILD_DIR}/oap-mllib/mllib-dal      
