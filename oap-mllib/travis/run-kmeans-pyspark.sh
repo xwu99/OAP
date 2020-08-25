@@ -11,9 +11,8 @@ export HDFS_ROOT=hdfs://localhost:8020
 export OAP_MLLIB_ROOT=${TRAVIS_BUILD_DIR}/oap-mllib
 
 # Data file is from Spark Examples (data/mllib/sample_kmeans_data.txt), the data file should be copied to HDFS
-DATA_FILE=data/sample_kmeans_data.txt
-$HADOOP_HOME/bin/hadoop fs -mkdir data
-$HADOOP_HOME/bin/hadoop fs -copyFromLocal $SPARK_HOME/data/mllib/sample_kmeans_data.txt data/
+$HADOOP_HOME/bin/hadoop fs -mkdir /data
+$HADOOP_HOME/bin/hadoop fs -copyFromLocal $SPARK_HOME/data/mllib/sample_kmeans_data.txt /data
 
 # == User to customize Spark executor cores and memory == #
 
@@ -51,9 +50,9 @@ SPARK_DRIVER_CLASSPATH=$OAP_MLLIB_JAR
 SPARK_EXECUTOR_CLASSPATH=./$OAP_MLLIB_JAR_NAME
 
 APP_PY="$OAP_MLLIB_ROOT/examples/kmeans-pyspark/kmeans-pyspark.py"
-DATA_FILE=data/sample_kmeans_data.txt
+DATA_FILE=/data/sample_kmeans_data.txt
 
-/usr/bin/time -p $SPARK_HOME/bin/spark-submit --master $SPARK_MASTER -v \
+$SPARK_HOME/bin/spark-submit --master $SPARK_MASTER -v \
     --num-executors $SPARK_NUM_EXECUTORS \
     --driver-memory $SPARK_DRIVER_MEMORY \
     --executor-cores $SPARK_EXECUTOR_CORES \
@@ -62,10 +61,9 @@ DATA_FILE=data/sample_kmeans_data.txt
     --conf "spark.default.parallelism=$SPARK_DEFAULT_PARALLELISM" \
     --conf "spark.sql.shuffle.partitions=$SPARK_DEFAULT_PARALLELISM" \
     --conf "spark.driver.extraClassPath=$SPARK_DRIVER_CLASSPATH" \
-    --conf "spark.executor.extraClassPath=$SPARK_EXECUTOR_CLASSPATH" \  
+    --conf "spark.executor.extraClassPath=$SPARK_EXECUTOR_CLASSPATH" \
     --conf "spark.shuffle.reduceLocality.enabled=false" \
     --conf "spark.network.timeout=1200s" \
     --conf "spark.task.maxFailures=1" \
     --jars $OAP_MLLIB_JAR \
-    $APP_PY $DATA_FILE \
-    2>&1 | tee KMeans-$(date +%m%d_%H_%M_%S).log
+    $APP_PY $DATA_FILE
