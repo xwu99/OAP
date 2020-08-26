@@ -113,6 +113,7 @@ jobs:
       - ${TRAVIS_BUILD_DIR}/oap-mllib/dev/install-build-deps-ubuntu.sh
       install:
       - cd ${TRAVIS_BUILD_DIR}/oap-mllib
+      - ./travis/config-ssh.sh
       - ./travis/setup-cluster.sh
       - ./travis/setup-python3-env.sh
       before_script:
