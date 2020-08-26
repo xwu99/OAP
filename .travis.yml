@@ -113,8 +113,8 @@ jobs:
       - ${TRAVIS_BUILD_DIR}/oap-mllib/dev/install-build-deps-ubuntu.sh
       install:
       - cd ${TRAVIS_BUILD_DIR}/oap-mllib
-      - sudo ./travis/setup-cluster.sh
-      - sudo pip install numpy
+      - ./travis/setup-cluster.sh
+      - ./travis/setup-python3-env.sh
       before_script:
       script:
       - cd ${TRAVIS_BUILD_DIR}/oap-mllib/mllib-dal      

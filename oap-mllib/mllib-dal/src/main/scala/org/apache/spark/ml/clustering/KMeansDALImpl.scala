@@ -54,7 +54,7 @@ class KMeansDALImpl (
     }
 
     // filter the empty partitions
-    val partRows = data.mapPartitionsWithIndex { (index: Int, it: Iterator[Vector]) =>
+    val partRows = dataForConversion.mapPartitionsWithIndex { (index: Int, it: Iterator[Vector]) =>
       Iterator(Tuple3(partitionDims(index)._1, index, it))
     }
     val nonEmptyPart = partRows.filter{entry => { entry._1 > 0 }}
