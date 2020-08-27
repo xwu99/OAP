@@ -54,7 +54,7 @@ SPARK_DRIVER_CLASSPATH=$OAP_MLLIB_JAR
 # Use relative path
 SPARK_EXECUTOR_CLASSPATH=./$OAP_MLLIB_JAR_NAME
 
-APP_PY="$OAP_MLLIB_ROOT/examples/kmeans-pyspark/kmeans-pyspark.py"
+APP_PY="$OAP_MLLIB_ROOT/travis/kmeans-pyspark.py"
 DATA_FILE=data/sample_kmeans_data.txt
 
 $SPARK_HOME/bin/spark-submit --master $SPARK_MASTER -v \
