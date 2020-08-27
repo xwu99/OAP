@@ -57,6 +57,8 @@ SPARK_EXECUTOR_CLASSPATH=./$OAP_MLLIB_JAR_NAME
 APP_PY="$OAP_MLLIB_ROOT/travis/kmeans-pyspark.py"
 DATA_FILE=data/sample_kmeans_data.txt
 
+export CCL_KVS_IP_PORT=$(hostname -I | awk '{print $1}')_51234
+
 $SPARK_HOME/bin/spark-submit --master $SPARK_MASTER -v \
     --num-executors $SPARK_NUM_EXECUTORS \
     --driver-memory $SPARK_DRIVER_MEMORY \
@@ -67,6 +69,7 @@ $SPARK_HOME/bin/spark-submit --master $SPARK_MASTER -v \
     --conf "spark.sql.shuffle.partitions=$SPARK_DEFAULT_PARALLELISM" \
     --conf "spark.driver.extraClassPath=$SPARK_DRIVER_CLASSPATH" \
     --conf "spark.executor.extraClassPath=$SPARK_EXECUTOR_CLASSPATH" \
+    --conf "spark.executorEnv.CCL_KVS_IP_PORT=$CCL_KVS_IP_PORT" \
     --conf "spark.shuffle.reduceLocality.enabled=false" \
     --conf "spark.network.timeout=1200s" \
     --conf "spark.task.maxFailures=1" \
