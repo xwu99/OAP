@@ -108,6 +108,9 @@ jobs:
       dist: bionic
       jdk:
       - openjdk8
+      cache:
+        directories:
+          - $HOME/.m2
       before_install:
       - echo ${TRAVIS_COMMIT_MESSAGE}
       - ${TRAVIS_BUILD_DIR}/oap-mllib/dev/install-build-deps-ubuntu.sh
