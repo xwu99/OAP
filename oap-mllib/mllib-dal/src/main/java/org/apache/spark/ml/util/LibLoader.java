@@ -54,6 +54,10 @@ public final class LibLoader {
         loadFromJar(subDir, "libMLlibDAL.so");
     }
 
+    public static synchronized void loadLibMLlibDAL() throws IOException {
+        loadFromJar(subDir, "libMLlibDAL.so");
+    }
+
     /**
      * Load lib as resource
      *
