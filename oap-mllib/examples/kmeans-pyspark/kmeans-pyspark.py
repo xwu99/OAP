@@ -59,12 +59,12 @@ if __name__ == "__main__":
     silhouette = evaluator.evaluate(predictions)
     print("Silhouette with squared euclidean distance = " + str(silhouette))
 
-    Shows the result.
+    # Shows the result.
     centers = model.clusterCenters()
     print("Cluster Centers: ")
     for center in centers:
         print(center)
-    $example off$
+    # $example off$
 
     spark.stop()
 
