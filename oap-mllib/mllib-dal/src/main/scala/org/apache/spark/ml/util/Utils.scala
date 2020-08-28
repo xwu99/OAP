@@ -2,6 +2,7 @@ package org.apache.spark.ml.util
 
 import java.net.InetAddress
 
+import com.intel.daal.utils.LibUtils
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.ml.linalg.Vector
@@ -69,6 +70,7 @@ object Utils {
   }
 
   def checkClusterPlatformCompatibility(sc: SparkContext) : Boolean = {
+    LibUtils.loadLibrary()
     LibLoader.loadLibMLlibDAL()
 
     // check driver platform compatibility
@@ -79,6 +81,7 @@ object Utils {
     val executor_num = Utils.sparkExecutorNum()
     val data = sc.parallelize(1 to executor_num, executor_num)
     val result = data.map { p =>
+      LibUtils.loadLibrary()
       LibLoader.loadLibMLlibDAL()
       OneDAL.cCheckPlatformCompatibility()
     }.collect()
