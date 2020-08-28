@@ -23,6 +23,8 @@ import java.util.Date;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import com.intel.daal.utils.LibUtils;
+
 public final class LibLoader {
     private static final String LIBRARY_PATH_IN_JAR = "/lib";
     private final static String subDir = "MLlibDAL_" + new Date().getTime();
@@ -55,6 +57,7 @@ public final class LibLoader {
     }
 
     public static synchronized void loadLibMLlibDAL() throws IOException {
+        LibUtils.loadLibrary();
         loadFromJar(subDir, "libMLlibDAL.so");
     }
 
