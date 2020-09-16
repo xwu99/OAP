@@ -95,7 +95,8 @@ class PCA @Since("1.5.0") (
     require($(k) <= numFeatures,
       s"source vector size $numFeatures must be no less than k=$k")
 
-    if (numFeatures < 65535) {
+    // Call oneDAL Correlation PCA implementation when numFeatures < 65535 and fall back otherwise
+    val parentModel  = if (numFeatures < 65535) {
       val executor_num = Utils.sparkExecutorNum()
       val executor_cores = Utils.sparkExecutorCores()
       val pca = new PCADALImpl(k = $(k), executor_num, executor_cores)
@@ -107,9 +108,10 @@ class PCA @Since("1.5.0") (
       }
       val pca = new feature.PCA(k = $(k))
       val pcaModel = pca.fit(inputOldVectors)
-      copyValues(new PCAModel(uid, pcaModel.pc.asML, pcaModel.explainedVariance.asML)
-        .setParent(this))
+      pcaModel
     }
+    copyValues(new PCAModel(uid, parentModel.pc.asML, parentModel.explainedVariance.asML)
+      .setParent(this))
   }
 
   @Since("1.5.0")

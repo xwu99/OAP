@@ -19,8 +19,7 @@ package org.apache.spark.ml.util
 
 import com.intel.daal.data_management.data.{HomogenNumericTable, NumericTable, RowMergedNumericTable, Matrix => DALMatrix}
 import com.intel.daal.services.DaalContext
-import org.apache.spark.SparkContext
-import org.apache.spark.ml.linalg.{Vector, Vectors}
+import org.apache.spark.ml.linalg.{DenseMatrix, DenseVector, Vector, Vectors}
 import org.apache.spark.mllib.linalg.{Vector => OldVector}
 import org.apache.spark.rdd.{ExecutorInProcessCoalescePartitioner, RDD}
 
@@ -71,7 +70,17 @@ object OneDAL {
     matrix
   }
 
-  def vectorsToNumericTables(vectors: RDD[Vector], executorNum: Int): RDD[Long] = {
+  def numericTableToDenseMatrix(table: NumericTable): DenseMatrix = {
+    // todo
+    DenseMatrix.eye(1)
+  }
+
+  def numericTable1xnToDenseVector(table_1xn: NumericTable): DenseVector = {
+    // todo
+    Vectors.zeros(1).toDense
+  }
+
+  def rddVectorToNumericTables(vectors: RDD[Vector], executorNum: Int): RDD[Long] = {
     // repartition to executorNum if not enough partitions
     val dataForConversion = if (vectors.getNumPartitions < executorNum) {
       vectors.repartition(executorNum).setName("Repartitioned for conversion").cache()
@@ -104,12 +113,12 @@ object OneDAL {
       var dalRow = 0
 
       it.foreach { curVector =>
-        val rowarr = curVector.toArray
-        OneDAL.cSetDoubleBatch(matrix.getCNumericTable, dalRow, rowarr, 1, numCols)
+        val rowArray = curVector.toArray
+        OneDAL.cSetDoubleBatch(matrix.getCNumericTable, dalRow, rowArray, 1, numCols)
         dalRow += 1
       }
 
-      Iterator(matrix.getCNumericTable)
+      matrix.getCNumericTable
     }.cache()
 
     // workaroud to fix the bug of multi executors handling same partition.
@@ -126,8 +135,7 @@ object OneDAL {
       val context = new DaalContext()
       val mergedData = new RowMergedNumericTable(context)
 
-      iter.foreach { curIter =>
-        val address = curIter.next()
+      iter.foreach { address =>
         OneDAL.cAddNumericTable(mergedData.getCNumericTable, address)
       }
       Iterator(mergedData.getCNumericTable)
@@ -137,13 +145,10 @@ object OneDAL {
   }
 
   @native def setNumericTableValue(numTableAddr: Long, rowIndex: Int, colIndex: Int, value: Double)
-  
 
   @native def cAddNumericTable(cObject: Long, numericTableAddr: Long)
 
   @native def cSetDoubleBatch(numTableAddr: Long, curRows: Int, batch: Array[Double], numRows: Int, numCols: Int)
- 
-  @native def cSetDoubleIterator(numTableAddr: Long, iter: java.util.Iterator[DataBatch], curRows: Int)
   
   @native def cFreeDataMemory(numTableAddr: Long)
 

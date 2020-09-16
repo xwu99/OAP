@@ -20,6 +20,8 @@ package org.apache.spark.ml.feature
 import com.intel.daal.algorithms.PCAResult
 import org.apache.spark.ml.linalg._
 import org.apache.spark.ml.util.{OneCCL, OneDAL, Utils}
+import org.apache.spark.mllib.feature.{PCAModel => MLlibPCAModel}
+import org.apache.spark.mllib.linalg.{DenseMatrix => OldDenseMatrix, Vectors => OldVectors}
 import org.apache.spark.rdd.RDD
 
 
@@ -28,9 +30,9 @@ class PCADALImpl (
     val executorNum: Int,
     val executorCores: Int) {
 
-  def fitWithCorrelation(input: RDD[Vector]) : PCAModel = {
+  def fitWithCorrelation(input: RDD[Vector]) : MLlibPCAModel = {
 
-    val coalescedTables = OneDAL.vectorsToNumericTables(input, executorNum)
+    val coalescedTables = OneDAL.rddVectorToNumericTables(input, executorNum)
 
     val executorIPAddress = Utils.sparkFirstExecutorIP(input.sparkContext)
 
@@ -48,10 +50,14 @@ class PCADALImpl (
       )
 
       val ret = if (OneCCL.isRoot()) {
-        //        assert(cCentroids != 0)
-        //        val centerVectors = OneDAL.numericTableToVectors(OneDAL.makeNumericTable(cCentroids))
-        //        Iterator((centerVectors, result.totalCost))
-        Iterator(1L)
+
+        val pcNumericTable = OneDAL.makeNumericTable(result.pcNumericTable)
+        val explainedVarianceNumericTable = OneDAL.makeNumericTable(result.explainedVarianceNumericTable)
+
+        val principleComponents = OneDAL.numericTableToDenseMatrix(pcNumericTable)
+        val explainedVariance = OneDAL.numericTable1xnToDenseVector(explainedVarianceNumericTable)
+
+        Iterator((principleComponents, explainedVariance))
       } else {
         Iterator.empty
       }
@@ -63,9 +69,15 @@ class PCADALImpl (
     // Make sure there is only one result from rank 0
     assert(results.length == 1)
 
-    null
-//    new PCAModel()
+    val pc = results(0)._1
+    val explainedVariance = results(0)._2
 
+    val parentModel = new MLlibPCAModel(k,
+      OldDenseMatrix.fromML(pc),
+      OldVectors.fromML(explainedVariance).toDense
+    )
+
+    parentModel
   }
 
   // Single entry to call Correlation PCA DAL backend with parameter K
