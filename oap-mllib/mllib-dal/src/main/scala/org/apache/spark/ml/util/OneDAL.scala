@@ -17,11 +17,12 @@
 
 package org.apache.spark.ml.util
 
-import com.intel.daal.data_management.data.{HomogenNumericTable, NumericTable, Matrix => DALMatrix}
+import com.intel.daal.data_management.data.{HomogenNumericTable, NumericTable, RowMergedNumericTable, Matrix => DALMatrix}
 import com.intel.daal.services.DaalContext
 import org.apache.spark.SparkContext
 import org.apache.spark.ml.linalg.{Vector, Vectors}
 import org.apache.spark.mllib.linalg.{Vector => OldVector}
+import org.apache.spark.rdd.{ExecutorInProcessCoalescePartitioner, RDD}
 
 object OneDAL {
 
@@ -68,6 +69,71 @@ object OneDAL {
     }
 
     matrix
+  }
+
+  def vectorsToNumericTables(vectors: RDD[Vector], executorNum: Int): RDD[Long] = {
+    // repartition to executorNum if not enough partitions
+    val dataForConversion = if (vectors.getNumPartitions < executorNum) {
+      vectors.repartition(executorNum).setName("Repartitioned for conversion").cache()
+    } else {
+      vectors
+    }
+
+    val partitionDims = Utils.getPartitionDims(dataForConversion)
+
+    // filter out empty partitions
+    val nonEmptyPartitions = dataForConversion.mapPartitionsWithIndex { (index: Int, it: Iterator[Vector]) =>
+      Iterator(Tuple3(partitionDims(index)._1, index, it))
+    }.filter { entry => { entry._1 > 0 }}
+
+    val numericTables = nonEmptyPartitions.map { entry =>
+      val numRows = entry._1
+      val index = entry._2
+      val it = entry._3
+      val numCols = partitionDims(index)._2
+
+      // Build DALMatrix, this will load libJavaAPI, libtbb, libtbbmalloc
+      val context = new DaalContext()
+      val matrix = new DALMatrix(context, classOf[java.lang.Double],
+        numCols.toLong, numRows.toLong, NumericTable.AllocationFlag.DoAllocate)
+
+      println("KMeansDALImpl: Loading libMLlibDAL.so")
+      // oneDAL libs should be loaded by now, extract libMLlibDAL.so to temp file and load
+      LibLoader.loadLibrary()
+
+      var dalRow = 0
+
+      it.foreach { curVector =>
+        val rowarr = curVector.toArray
+        OneDAL.cSetDoubleBatch(matrix.getCNumericTable, dalRow, rowarr, 1, numCols)
+        dalRow += 1
+      }
+
+      Iterator(matrix.getCNumericTable)
+    }.cache()
+
+    // workaroud to fix the bug of multi executors handling same partition.
+    numericTables.foreachPartition(() => _)
+    numericTables.count()
+
+    val cachedRdds = vectors.sparkContext.getPersistentRDDs
+    cachedRdds.filter(r => r._2.name=="instancesRDD").foreach (r => r._2.unpersist())
+
+    val coalescedRdd = numericTables.coalesce(1,
+      partitionCoalescer = Some(new ExecutorInProcessCoalescePartitioner()))
+
+    val coalescedTables = coalescedRdd.mapPartitions { iter =>
+      val context = new DaalContext()
+      val mergedData = new RowMergedNumericTable(context)
+
+      iter.foreach { curIter =>
+        val address = curIter.next()
+        OneDAL.cAddNumericTable(mergedData.getCNumericTable, address)
+      }
+      Iterator(mergedData.getCNumericTable)
+    }.cache()
+
+    coalescedTables
   }
 
   @native def setNumericTableValue(numTableAddr: Long, rowIndex: Int, colIndex: Int, value: Double)
