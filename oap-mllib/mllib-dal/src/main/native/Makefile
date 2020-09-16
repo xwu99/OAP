@@ -36,10 +36,10 @@ LIBS := -L${CCL_ROOT}/lib -l:libccl.a \
         -L$(TBBROOT)/lib -ltbb -ltbbmalloc
 
 CPP_SRCS += \
-./OneCCL.cpp ./OneDAL.cpp ./KMeansDALImpl.cpp ./PCADALImpl.cpp
+./OneCCL.cpp ./OneDAL.cpp ./KMeansDALImpl.cpp ./PCADALImpl.cpp ./service.cpp ./error_handling.cpp
 
 OBJS += \
-./OneCCL.o ./OneDAL.o ./KMeansDALImpl.o ./PCADALImpl.o
+./OneCCL.o ./OneDAL.o ./KMeansDALImpl.o ./PCADALImpl.o ./service.o ./error_handling.o
 
 # Output Binary
 OUTPUT = ../../../target/libMLlibDAL.so

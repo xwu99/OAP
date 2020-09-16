@@ -19,13 +19,53 @@ package org.apache.spark.ml.feature
 
 import com.intel.daal.algorithms.PCAResult
 import org.apache.spark.ml.linalg._
+import org.apache.spark.ml.util.{OneCCL, OneDAL, Utils}
 import org.apache.spark.rdd.RDD
 
+
 class PCADALImpl (
-    val k: Int) {
+    val k: Int,
+    val executorNum: Int,
+    val executorCores: Int) {
 
   def fitWithCorrelation(input: RDD[Vector]) : PCAModel = {
+
+    val coalescedTables = OneDAL.vectorsToNumericTables(input, executorNum)
+
+    val executorIPAddress = Utils.sparkFirstExecutorIP(input.sparkContext)
+
+    val results = coalescedTables.mapPartitions { table =>
+      val tableArr = table.next()
+      OneCCL.init(executorNum, executorIPAddress, OneCCL.KVS_PORT)
+
+      var result = new PCAResult()
+      cPCADALCorrelation(
+        tableArr,
+        k,
+        executorNum,
+        executorCores,
+        result
+      )
+
+      val ret = if (OneCCL.isRoot()) {
+        //        assert(cCentroids != 0)
+        //        val centerVectors = OneDAL.numericTableToVectors(OneDAL.makeNumericTable(cCentroids))
+        //        Iterator((centerVectors, result.totalCost))
+        Iterator(1L)
+      } else {
+        Iterator.empty
+      }
+
+      OneCCL.cleanup()
+      ret
+    }.collect()
+
+    // Make sure there is only one result from rank 0
+    assert(results.length == 1)
+
     null
+//    new PCAModel()
+
   }
 
   // Single entry to call Correlation PCA DAL backend with parameter K
