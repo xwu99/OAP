@@ -22,7 +22,7 @@ typedef double algorithmFPType; /* Algorithm floating-point type */
  * Signature: (JIIILcom/intel/daal/algorithms/PCAResult;)J
  */
 JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_feature_PCADALImpl_cPCADALCorrelation(
-    JNIEnv*, jobject, jlong pNumTabData, jint k, jint executor_num, jint executor_cores,
+    JNIEnv *env, jobject obj, jlong pNumTabData, jint k, jint executor_num, jint executor_cores,
     jobject resultObj) {
   size_t rankId;
   ccl_get_comm_rank(NULL, &rankId);
@@ -109,7 +109,20 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_feature_PCADALImpl_cPCADALCorre
     std::cout << "PCA (native): master step took " << duration << " secs" << std::endl;
 
     /* Print the results */
-    // printNumericTable(result->get(pca::eigenvalues), "Eigenvalues:");
-    // printNumericTable(result->get(pca::eigenvectors), "Eigenvectors:");
+    printNumericTable(result->get(pca::eigenvalues), "Eigenvalues:");
+    printNumericTable(result->get(pca::eigenvectors), "Eigenvectors:");
+
+    // Todo: return top K principle components
+    // Get the class of the input object
+    jclass clazz = env->GetObjectClass(resultObj);
+    // Get Field references
+    jfieldID pcNumericTableField = env->GetFieldID(clazz, "pcNumericTable", "J");
+    jfieldID explainedVarianceNumericTableField = env->GetFieldID(clazz, "explainedVarianceNumericTable", "J");
+
+    NumericTablePtr *eigenvalues = new NumericTablePtr(result->get(pca::eigenvalues));
+    NumericTablePtr *eigenvectors = new NumericTablePtr(result->get(pca::eigenvectors));
+
+    env->SetLongField(resultObj, pcNumericTableField, (jlong)eigenvectors);
+    env->SetLongField(resultObj, explainedVarianceNumericTableField, (jlong)eigenvalues);
   }
 }
