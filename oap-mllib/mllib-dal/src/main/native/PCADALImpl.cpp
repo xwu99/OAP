@@ -64,14 +64,21 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_feature_PCADALImpl_cPCADALCorre
   size_t* recv_counts = new size_t[comm_size * perNodeArchLength];
   for (int i = 0; i < comm_size; i++) recv_counts[i] = perNodeArchLength;
 
-  cout << "PCA (native): Receiving " << perNodeArchLength * nBlocks << " bytes" << endl;
+  cout << "PCA (native): ccl_allgatherv receiving " << perNodeArchLength * nBlocks << " bytes" << endl;
 
   /* Transfer partial results to step 2 on the root node */
   // MPI_Gather(nodeResults, perNodeArchLength, MPI_CHAR, serializedData.get(),
   // perNodeArchLength, MPI_CHAR, ccl_root, MPI_COMM_WORLD);
+
+  auto t1 = std::chrono::high_resolution_clock::now();
+
   ccl_allgatherv(nodeResults, perNodeArchLength, serializedData.get(), recv_counts,
                  ccl_dtype_char, NULL, NULL, NULL, &request);
   ccl_wait(request);
+
+  auto t2 = std::chrono::high_resolution_clock::now();
+  auto duration = std::chrono::duration_cast<std::chrono::seconds>( t2 - t1 ).count();
+  std::cout << "PCA (native): ccl_allgatherv took " << duration << " secs" << std::endl;
 
   delete[] nodeResults;
 
@@ -125,4 +132,6 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_feature_PCADALImpl_cPCADALCorre
     env->SetLongField(resultObj, pcNumericTableField, (jlong)eigenvectors);
     env->SetLongField(resultObj, explainedVarianceNumericTableField, (jlong)eigenvalues);
   }
+
+  return 0;
 }

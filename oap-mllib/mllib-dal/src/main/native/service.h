@@ -41,4 +41,7 @@ using namespace daal::data_management;
 
 typedef std::vector<daal::byte> ByteBuffer;
 
+void printNumericTable(const NumericTablePtr & dataTable, const char * message = "", size_t nPrintedRows = 0, size_t nPrintedCols = 0,
+                       size_t interval = 10);
+
 #endif

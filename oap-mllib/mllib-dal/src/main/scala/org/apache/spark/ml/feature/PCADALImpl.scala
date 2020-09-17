@@ -28,7 +28,7 @@ import org.apache.spark.rdd.RDD
 class PCADALImpl (
     val k: Int,
     val executorNum: Int,
-    val executorCores: Int) {
+    val executorCores: Int) extends Serializable {
 
   def fitWithCorrelation(input: RDD[Vector]) : MLlibPCAModel = {
 
@@ -62,7 +62,8 @@ class PCADALImpl (
         Iterator.empty
       }
 
-      OneCCL.cleanup()
+//      OneCCL.cleanup()
+
       ret
     }.collect()
 

@@ -402,8 +402,8 @@ void printNumericTable(NumericTable & dataTable, const char * message = "", size
     printNumericTable(&dataTable, message, nPrintedRows, nPrintedCols, interval);
 }
 
-void printNumericTable(const NumericTablePtr & dataTable, const char * message = "", size_t nPrintedRows = 0, size_t nPrintedCols = 0,
-                       size_t interval = 10)
+void printNumericTable(const NumericTablePtr & dataTable, const char * message, size_t nPrintedRows, size_t nPrintedCols,
+                       size_t interval)
 {
     printNumericTable(dataTable.get(), message, nPrintedRows, nPrintedCols, interval);
 }

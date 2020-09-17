@@ -106,7 +106,7 @@ object OneDAL {
       val matrix = new DALMatrix(context, classOf[java.lang.Double],
         numCols.toLong, numRows.toLong, NumericTable.AllocationFlag.DoAllocate)
 
-      println("KMeansDALImpl: Loading libMLlibDAL.so")
+      println("IntelMLlib: Loading libMLlibDAL.so")
       // oneDAL libs should be loaded by now, extract libMLlibDAL.so to temp file and load
       LibLoader.loadLibrary()
 
