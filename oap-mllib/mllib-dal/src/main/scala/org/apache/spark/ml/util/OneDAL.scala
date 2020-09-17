@@ -17,6 +17,8 @@
 
 package org.apache.spark.ml.util
 
+import java.nio.DoubleBuffer
+
 import com.intel.daal.data_management.data.{HomogenNumericTable, NumericTable, RowMergedNumericTable, Matrix => DALMatrix}
 import com.intel.daal.services.DaalContext
 import org.apache.spark.ml.linalg.{DenseMatrix, DenseVector, Vector, Vectors}
@@ -68,16 +70,6 @@ object OneDAL {
     }
 
     matrix
-  }
-
-  def numericTableToDenseMatrix(table: NumericTable): DenseMatrix = {
-    // todo
-    DenseMatrix.eye(1)
-  }
-
-  def numericTable1xnToDenseVector(table_1xn: NumericTable): DenseVector = {
-    // todo
-    Vectors.zeros(1).toDense
   }
 
   def rddVectorToNumericTables(vectors: RDD[Vector], executorNum: Int): RDD[Long] = {

@@ -17,7 +17,11 @@
 
 package org.apache.spark.ml.feature
 
+import java.nio.DoubleBuffer
+import java.util.Arrays
+
 import com.intel.daal.algorithms.PCAResult
+import com.intel.daal.data_management.data.{HomogenNumericTable, NumericTable, Matrix => DALMatrix}
 import org.apache.spark.ml.linalg._
 import org.apache.spark.ml.util.{OneCCL, OneDAL, Utils}
 import org.apache.spark.mllib.feature.{PCAModel => MLlibPCAModel}
@@ -54,8 +58,8 @@ class PCADALImpl (
         val pcNumericTable = OneDAL.makeNumericTable(result.pcNumericTable)
         val explainedVarianceNumericTable = OneDAL.makeNumericTable(result.explainedVarianceNumericTable)
 
-        val principleComponents = OneDAL.numericTableToDenseMatrix(pcNumericTable)
-        val explainedVariance = OneDAL.numericTable1xnToDenseVector(explainedVarianceNumericTable)
+        val principleComponents = getPrincipleComponentsFromDAL(pcNumericTable, k)
+        val explainedVariance = getExplainedVarianceFromDAL(explainedVarianceNumericTable, k)
 
         Iterator((principleComponents, explainedVariance))
       } else {
@@ -79,6 +83,37 @@ class PCADALImpl (
     )
 
     parentModel
+  }
+
+  def getPrincipleComponentsFromDAL(table: NumericTable, k: Int): DenseMatrix = {
+    val data = table.asInstanceOf[HomogenNumericTable].getDoubleArray()
+
+    val numRows = table.getNumberOfRows.toInt
+
+    println(k, numRows)
+
+    require(k <= numRows, "k should be less or equal to row number")
+
+    val numCols = table.getNumberOfColumns.toInt
+
+    val result = DenseMatrix.zeros(numCols, k)
+
+    for (row <- 0 until k) {
+      for (col <- 0 until numCols) {
+        result(col, row) = data(row * numCols + col)
+      }
+    }
+
+    result
+  }
+
+  def getExplainedVarianceFromDAL(table_1xn: NumericTable, k: Int): DenseVector = {
+    val data = table_1xn.asInstanceOf[HomogenNumericTable].getDoubleArray()
+    val sum = data.sum
+    val topK = Arrays.copyOfRange(data, 0, k)
+    for ( i <- 0 until k )
+      topK(i) = topK(i) / sum
+    new DenseVector(topK)
   }
 
   // Single entry to call Correlation PCA DAL backend with parameter K

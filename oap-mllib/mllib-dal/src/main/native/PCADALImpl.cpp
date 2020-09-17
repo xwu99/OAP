@@ -40,7 +40,7 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_feature_PCADALImpl_cPCADALCorre
 
   /* Create an algorithm for principal component analysis using the correlation method on
    * local nodes */
-  pca::Distributed<step1Local> localAlgorithm;
+  pca::Distributed<step1Local, algorithmFPType> localAlgorithm;
 
   /* Set the input data set to the algorithm */
   localAlgorithm.input.set(pca::data, pData);
@@ -87,7 +87,7 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_feature_PCADALImpl_cPCADALCorre
 
     /* Create an algorithm for principal component analysis using the correlation method
      * on the master node */
-    pca::Distributed<step2Master> masterAlgorithm;
+    pca::Distributed<step2Master, algorithmFPType> masterAlgorithm;
 
     for (size_t i = 0; i < nBlocks; i++) {
       /* Deserialize partial results from step 1 */
