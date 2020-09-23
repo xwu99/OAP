@@ -41,14 +41,29 @@ object Utils {
   }
 
   // Run on Driver
-  def sparkExecutorNum(): Int = {
-    val conf = new SparkConf()
+//  def sparkExecutorNum(): Int = {
+//    val conf = new SparkConf()
+//
+//    val executorNum = conf.getInt("spark.executor.instances", -1)
+//
+//    assert(executorNum != -1, message = "spark.executor.instances not set")
+//
+//    executorNum
+//  }
 
-    val executorNum = conf.getInt("spark.executor.instances", -1)
+  def sparkExecutorNum(sc: SparkContext): Int = {
 
-    assert(executorNum != -1, message = "spark.executor.instances not set")
+    if (sc.master == "local")
+      return 1
 
-    executorNum
+    // Create empty partitions to start executors
+    sc.parallelize(Seq[Int]()).count()
+
+    // Get running executors infos
+    val executorInfos = sc.statusTracker.getExecutorInfos
+
+    // Return executor number (exclude driver)
+    executorInfos.length - 1
   }
 
   def sparkExecutorCores(): Int = {
@@ -61,9 +76,16 @@ object Utils {
   }
 
   def sparkFirstExecutorIP(sc: SparkContext): String = {
+    // Create empty partitions to start executors
+    sc.parallelize(Seq[Int]()).count()
+
     val info = sc.statusTracker.getExecutorInfos
     // get first executor, info(0) is driver
-    val host = info(1).host()
+
+    val host = if (sc.master == "local")
+      info(0).host()
+    else
+      info(1).host()
     val ip = InetAddress.getByName(host).getHostAddress
     ip
   }
