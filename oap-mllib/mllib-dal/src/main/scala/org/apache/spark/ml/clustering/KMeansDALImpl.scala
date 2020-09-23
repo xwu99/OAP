@@ -17,16 +17,13 @@
 
 package org.apache.spark.ml.clustering
 
-import com.intel.daal.algorithms.KMeansResult
-import com.intel.daal.data_management.data.{NumericTable, HomogenNumericTable, RowMergedNumericTable, Matrix => DALMatrix}
+import com.intel.daal.data_management.data.{NumericTable, RowMergedNumericTable, Matrix => DALMatrix}
 import com.intel.daal.services.DaalContext
+import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.ml.util._
 import org.apache.spark.mllib.clustering.{DistanceMeasure, KMeansModel => MLlibKMeansModel}
-import org.apache.spark.ml.linalg.Vector
-import org.apache.spark.ml.util.OneDAL._
 import org.apache.spark.mllib.linalg.{Vector => OldVector, Vectors => OldVectors}
 import org.apache.spark.rdd.{ExecutorInProcessCoalescePartitioner, RDD}
-import scala.collection.mutable.ArrayBuffer
 
 class KMeansDALImpl (
   var nClusters : Int = 4,
@@ -76,8 +73,6 @@ class KMeansDALImpl (
       println("KMeansDALImpl: Loading libMLlibDAL.so" )
       // oneDAL libs should be loaded by now, extract libMLlibDAL.so to temp file and load
       LibLoader.loadLibrary()
-
-      import scala.collection.JavaConverters._
 
       var dalRow = 0
          

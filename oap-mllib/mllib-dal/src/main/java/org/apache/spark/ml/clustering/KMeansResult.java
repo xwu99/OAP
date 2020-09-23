@@ -14,7 +14,7 @@
  * limitations under the License.
  *******************************************************************************/
 
-package com.intel.daal.algorithms;
+package org.apache.spark.ml.clustering;
 
 public class KMeansResult {
     public long cNumericTable;
