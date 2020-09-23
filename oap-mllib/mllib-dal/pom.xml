@@ -151,6 +151,55 @@
             </plugin>
 
             <plugin>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>3.0.2</version>
+                <configuration>
+                    <outputDirectory>${project.build.testOutputDirectory}/lib</outputDirectory>
+                    <resources>
+                        <resource>
+                            <directory>${env.CCL_ROOT}/lib</directory>
+                            <includes>
+                                <include>libpmi.so.1</include>
+                                <include>libresizable_pmi.so.1</include>
+                                <include>libfabric.so.1</include>
+                                <include>libccl_atl_ofi.so.1</include>
+                            </includes>
+                        </resource>
+                        <resource>
+                            <directory>${env.CCL_ROOT}/lib/prov</directory>
+                            <includes>
+                                <include>libsockets-fi.so</include>
+                            </includes>
+                        </resource>
+                        <resource>
+                            <directory>${project.build.directory}</directory>
+                            <includes>
+                                <include>libMLlibDAL.so</include>
+                            </includes>
+                        </resource>
+                    </resources>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>com.coderplus.maven.plugins</groupId>
+                <artifactId>copy-rename-maven-plugin</artifactId>
+                <version>1.0</version>
+                <executions>
+                    <execution>
+                        <id>rename-file</id>
+                        <phase>process-test-resources</phase>
+                        <goals>
+                            <goal>rename</goal>
+                        </goals>
+                        <configuration>
+                            <sourceFile>${project.build.testOutputDirectory}/lib/libccl_atl_ofi.so.1</sourceFile>
+                            <destinationFile>${project.build.testOutputDirectory}/lib/libccl_atl_ofi.so</destinationFile>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
                 <artifactId>maven-assembly-plugin</artifactId>
                 <version>3.0.0</version>
                 <configuration>
