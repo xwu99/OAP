@@ -32,7 +32,7 @@ echo =============================
 # -Dtest=None to turn off the Java tests
 
 # Test all
-mvn -Dtest=none test
+mvn -Dtest=none -Dmaven.test.skip=false test
 
 # Individual test
 #mvn -Dtest=none -DwildcardSuites=org.apache.spark.ml.clustering.IntelKMeansSuite test

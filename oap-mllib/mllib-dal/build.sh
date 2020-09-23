@@ -29,4 +29,4 @@ echo CCL_ROOT=$CCL_ROOT
 echo GCC Version: $(gcc -dumpversion)
 echo =============================
 
-mvn clean package
+mvn -DskipTests clean package

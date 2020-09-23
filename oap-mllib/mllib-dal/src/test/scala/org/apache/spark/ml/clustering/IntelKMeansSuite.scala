@@ -1,9 +1,10 @@
 package org.apache.spark.ml.clustering
 
-import org.scalatest.funsuite.AnyFunSuite
-import org.scalatest.{Assertions, BeforeAndAfterAll}
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.SparkContext
+import org.apache.spark.mllib.clustering.{DistanceMeasure, KMeans => MLlibKMeans}
 import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.funsuite.AnyFunSuite
 
 class IntelKMeansSuite extends AnyFunSuite with BeforeAndAfterAll {
 
@@ -17,7 +18,6 @@ class IntelKMeansSuite extends AnyFunSuite with BeforeAndAfterAll {
     spark = SparkSession
       .builder
       .master("local")
-      .config("spark.sql.testkey", "true")
       .appName(s"${this.getClass.getSimpleName}")
       .getOrCreate()
 
@@ -32,5 +32,27 @@ class IntelKMeansSuite extends AnyFunSuite with BeforeAndAfterAll {
 
   test("generateKMeansData") {
     dataset.show()
+  }
+
+  test("default parameters") {
+    val kmeans = new KMeans()
+
+    assert(kmeans.getK === 2)
+    assert(kmeans.getFeaturesCol === "features")
+    assert(kmeans.getPredictionCol === "prediction")
+    assert(kmeans.getMaxIter === 20)
+    assert(kmeans.getInitMode === MLlibKMeans.K_MEANS_PARALLEL)
+    assert(kmeans.getInitSteps === 2)
+    assert(kmeans.getTol === 1e-4)
+    assert(kmeans.getDistanceMeasure === DistanceMeasure.EUCLIDEAN)
+    val model = kmeans.setMaxIter(1).fit(dataset)
+
+//    val transformed = model.transform(dataset)
+//    checkNominalOnDF(transformed, "prediction", model.clusterCenters.length)
+//
+//    MLTestingUtils.checkCopyAndUids(kmeans, model)
+//    assert(model.hasSummary)
+//    val copiedModel = model.copy(ParamMap.empty)
+//    assert(copiedModel.hasSummary)
   }
 }
