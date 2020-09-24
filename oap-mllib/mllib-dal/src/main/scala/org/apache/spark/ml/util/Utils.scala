@@ -53,7 +53,7 @@ object Utils {
 
   def sparkExecutorNum(sc: SparkContext): Int = {
 
-    if (sc.master == "local")
+    if (sc.master.contains("local"))
       return 1
 
     // Create empty partitions to start executors
@@ -82,7 +82,7 @@ object Utils {
     val info = sc.statusTracker.getExecutorInfos
     // get first executor, info(0) is driver
 
-    val host = if (sc.master == "local")
+    val host = if (sc.master.contains("local"))
       info(0).host()
     else
       info(1).host()
