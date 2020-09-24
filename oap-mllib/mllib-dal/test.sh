@@ -31,6 +31,8 @@ echo =============================
 
 # -Dtest=None to turn off the Java tests
 
+# Enable signal chaining support for JNI
+export LD_PRELOAD=$JAVA_HOME/jre/lib/amd64/libjsig.so
 # Test all
 mvn -Dtest=none -Dmaven.test.skip=false test
 
