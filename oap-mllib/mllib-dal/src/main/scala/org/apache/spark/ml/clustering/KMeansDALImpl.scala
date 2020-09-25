@@ -19,6 +19,7 @@ package org.apache.spark.ml.clustering
 
 import com.intel.daal.data_management.data.{NumericTable, RowMergedNumericTable, Matrix => DALMatrix}
 import com.intel.daal.services.DaalContext
+import org.apache.spark.internal.Logging
 import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.ml.util._
 import org.apache.spark.mllib.clustering.{DistanceMeasure, KMeansModel => MLlibKMeansModel}
@@ -26,14 +27,14 @@ import org.apache.spark.mllib.linalg.{Vector => OldVector, Vectors => OldVectors
 import org.apache.spark.rdd.{ExecutorInProcessCoalescePartitioner, RDD}
 
 class KMeansDALImpl (
-  var nClusters : Int = 4,
-  var maxIterations : Int = 10,
-  var tolerance : Double = 1e-6,
-  val distanceMeasure: String = DistanceMeasure.EUCLIDEAN,
-  val centers: Array[OldVector] = null,
+  var nClusters : Int,
+  var maxIterations : Int,
+  var tolerance : Double,
+  val distanceMeasure: String,
+  val centers: Array[OldVector],
   val executorNum: Int,
   val executorCores: Int
-) extends Serializable {
+) extends Serializable with Logging {
 
   def runWithRDDVector(data: RDD[Vector], instr: Option[Instrumentation]) : MLlibKMeansModel = {
 
@@ -43,7 +44,7 @@ class KMeansDALImpl (
 
     // repartition to executorNum if not enough partitions
     val dataForConversion = if (data.getNumPartitions < executorNum) {
-	  data.repartition(executorNum).setName("Repartitioned for conversion").cache()
+      data.repartition(executorNum).setName("Repartitioned for conversion").cache()
     } else {
       data
     }
@@ -118,6 +119,7 @@ class KMeansDALImpl (
         tableArr,
         initCentroids.getCNumericTable,
         nClusters,
+        tolerance,
         maxIterations,
         executorNum,
         executorCores,
@@ -127,7 +129,7 @@ class KMeansDALImpl (
       val ret = if (OneCCL.isRoot()) {
         assert(cCentroids != 0)
         val centerVectors = OneDAL.numericTableToVectors(OneDAL.makeNumericTable(cCentroids))
-        Iterator((centerVectors, result.totalCost))
+        Iterator((centerVectors, result.totalCost, result.iterationNum))
       } else {
         Iterator.empty
       }
@@ -149,22 +151,29 @@ class KMeansDALImpl (
 
     val centerVectors = results(0)._1
     val totalCost = results(0)._2
+    val iterationNum = results(0)._3
 
+    if (iterationNum == maxIterations) {
+      logInfo(s"KMeans reached the max number of iterations: $maxIterations.")
+    } else {
+      logInfo(s"KMeans converged in $iterationNum iterations.")
+    }
+
+    logInfo(s"The cost is $totalCost.")
     instr.foreach(_.logInfo(s"OneDAL output centroids:\n${centerVectors.mkString("\n")}"))
-
-    // TODO: tolerance support in DAL
-    val iteration = maxIterations
 
     val parentModel = new MLlibKMeansModel(
       centerVectors.map(OldVectors.fromML(_)),
-      distanceMeasure, totalCost, iteration)
+      distanceMeasure, totalCost, iterationNum)
 
     parentModel
   }
 
   // Single entry to call KMeans DAL backend with initial centers, output centers
   @native private def cKMeansDALComputeWithInitCenters(data: Long, centers: Long,
-                                                       cluster_num: Int, iteration_num: Int,
+                                                       cluster_num: Int,
+                                                       tolerance: Double,
+                                                       iteration_num: Int,
                                                        executor_num: Int,
                                                        executor_cores: Int,
                                                        result: KMeansResult): Long
