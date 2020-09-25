@@ -107,43 +107,42 @@ class IntelKMeansSuite extends MLTest with DefaultReadWriteTest with PMMLReadWri
     }
   }
 
-// TODO: Add tolerance support
-//  test("fit, transform and summary") {
-//    val predictionColName = "kmeans_prediction"
-//    val kmeans = new KMeans().setK(k).setPredictionCol(predictionColName).setSeed(1)
-//    val model = kmeans.fit(dataset)
-//    assert(model.clusterCenters.length === k)
-//
-//    testTransformerByGlobalCheckFunc[Tuple1[Vector]](dataset.toDF(), model,
-//      "features", predictionColName) { rows =>
-//      val clusters = rows.map(_.getAs[Int](predictionColName)).toSet
-//      assert(clusters.size === k)
-//      assert(clusters === Set(0, 1, 2, 3, 4))
-//    }
-//
-//    assert(model.hasParent)
-//
-//    // Check validity of model summary
-//    val numRows = dataset.count()
-//    assert(model.hasSummary)
-//    val summary: KMeansSummary = model.summary
-//    assert(summary.predictionCol === predictionColName)
-//    assert(summary.featuresCol === "features")
-//    assert(summary.predictions.count() === numRows)
-//    for (c <- Array(predictionColName, "features")) {
-//      assert(summary.predictions.columns.contains(c))
-//    }
-//    assert(summary.cluster.columns === Array(predictionColName))
-//    assert(summary.trainingCost < 0.1)
-//    val clusterSizes = summary.clusterSizes
-//    assert(clusterSizes.length === k)
-//    assert(clusterSizes.sum === numRows)
-//    assert(clusterSizes.forall(_ >= 0))
-//    assert(summary.numIter == 1)
-//
-//    model.setSummary(None)
-//    assert(!model.hasSummary)
-//  }
+  test("fit, transform and summary") {
+    val predictionColName = "kmeans_prediction"
+    val kmeans = new KMeans().setK(k).setPredictionCol(predictionColName).setSeed(1)
+    val model = kmeans.fit(dataset)
+    assert(model.clusterCenters.length === k)
+
+    testTransformerByGlobalCheckFunc[Tuple1[Vector]](dataset.toDF(), model,
+      "features", predictionColName) { rows =>
+      val clusters = rows.map(_.getAs[Int](predictionColName)).toSet
+      assert(clusters.size === k)
+      assert(clusters === Set(0, 1, 2, 3, 4))
+    }
+
+    assert(model.hasParent)
+
+    // Check validity of model summary
+    val numRows = dataset.count()
+    assert(model.hasSummary)
+    val summary: KMeansSummary = model.summary
+    assert(summary.predictionCol === predictionColName)
+    assert(summary.featuresCol === "features")
+    assert(summary.predictions.count() === numRows)
+    for (c <- Array(predictionColName, "features")) {
+      assert(summary.predictions.columns.contains(c))
+    }
+    assert(summary.cluster.columns === Array(predictionColName))
+    assert(summary.trainingCost < 0.1)
+    val clusterSizes = summary.clusterSizes
+    assert(clusterSizes.length === k)
+    assert(clusterSizes.sum === numRows)
+    assert(clusterSizes.forall(_ >= 0))
+    assert(summary.numIter == 1)
+
+    model.setSummary(None)
+    assert(!model.hasSummary)
+  }
 
   test("KMeansModel transform with non-default feature and prediction cols") {
     val featuresColName = "kmeans_model_features"
