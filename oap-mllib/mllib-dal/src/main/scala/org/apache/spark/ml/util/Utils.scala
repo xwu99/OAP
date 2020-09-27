@@ -82,7 +82,7 @@ object Utils {
     val info = sc.statusTracker.getExecutorInfos
     // get first executor, info(0) is driver
 
-    val host = if (sc.master.contains("local"))
+    val host = if (sc.master.startsWith("local"))
       info(0).host()
     else
       info(1).host()
