@@ -73,7 +73,7 @@ class KMeansDALImpl (
 
       println("KMeansDALImpl: Loading libMLlibDAL.so" )
       // oneDAL libs should be loaded by now, extract libMLlibDAL.so to temp file and load
-      LibLoader.loadLibrary()
+      LibLoader.loadLibraries()
 
       var dalRow = 0
          
