@@ -51,9 +51,6 @@ static jmethodID arrow_field_node_builder_constructor;
 static jclass arrowbuf_builder_class;
 static jmethodID arrowbuf_builder_constructor;
 
-static jclass partition_file_info_class;
-static jmethodID partition_file_info_constructor;
-
 static jclass split_result_class;
 static jmethodID split_result_constructor;
 
@@ -67,6 +64,7 @@ static arrow::jni::ConcurrentMap<std::shared_ptr<CodeGenerator>> handler_holder_
 static arrow::jni::ConcurrentMap<std::shared_ptr<ResultIterator<arrow::RecordBatch>>>
     batch_iterator_holder_;
 
+using sparkcolumnarplugin::shuffle::SplitOptions;
 using sparkcolumnarplugin::shuffle::Splitter;
 static arrow::jni::ConcurrentMap<std::shared_ptr<Splitter>> shuffle_splitter_holder_;
 static arrow::jni::ConcurrentMap<std::shared_ptr<arrow::Schema>>
@@ -89,15 +87,6 @@ std::shared_ptr<ResultIterator<arrow::RecordBatch>> GetBatchIterator(JNIEnv* env
     env->ThrowNew(illegal_argument_exception_class, error_message.c_str());
   }
   return handler;
-}
-
-std::shared_ptr<Splitter> GetShuffleSplitter(JNIEnv* env, jlong id) {
-  auto splitter = shuffle_splitter_holder_.Lookup(id);
-  if (!splitter) {
-    std::string error_message = "invalid reader id " + std::to_string(id);
-    env->ThrowNew(illegal_argument_exception_class, error_message.c_str());
-  }
-  return splitter;
 }
 
 jobject MakeRecordBatchBuilder(JNIEnv* env, std::shared_ptr<arrow::Schema> schema,
@@ -181,6 +170,8 @@ jint JNI_OnLoad(JavaVM* vm, void* reserved) {
   }
 
   io_exception_class = CreateGlobalClassReference(env, "Ljava/io/IOException;");
+  unsupportedoperation_exception_class =
+      CreateGlobalClassReference(env, "Ljava/lang/UnsupportedOperationException;");
   illegal_access_exception_class =
       CreateGlobalClassReference(env, "Ljava/lang/IllegalAccessException;");
   illegal_argument_exception_class =
@@ -203,16 +194,9 @@ jint JNI_OnLoad(JavaVM* vm, void* reserved) {
   arrowbuf_builder_constructor =
       GetMethodID(env, arrowbuf_builder_class, "<init>", "(JJIJ)V");
 
-  partition_file_info_class =
-      CreateGlobalClassReference(env, "Lcom/intel/oap/vectorized/PartitionFileInfo;");
-  partition_file_info_constructor =
-      GetMethodID(env, partition_file_info_class, "<init>", "(ILjava/lang/String;)V");
-
   split_result_class =
       CreateGlobalClassReference(env, "Lcom/intel/oap/vectorized/SplitResult;");
-  split_result_constructor =
-      GetMethodID(env, split_result_class, "<init>",
-                  "(JJJ[Lcom/intel/oap/vectorized/PartitionFileInfo;)V");
+  split_result_constructor = GetMethodID(env, split_result_class, "<init>", "(JJJJJ[J)V");
 
   return JNI_VERSION;
 }
@@ -223,13 +207,13 @@ void JNI_OnUnload(JavaVM* vm, void* reserved) {
   vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION);
 
   env->DeleteGlobalRef(io_exception_class);
+  env->DeleteGlobalRef(unsupportedoperation_exception_class);
   env->DeleteGlobalRef(illegal_access_exception_class);
   env->DeleteGlobalRef(illegal_argument_exception_class);
 
   env->DeleteGlobalRef(arrow_field_node_builder_class);
   env->DeleteGlobalRef(arrowbuf_builder_class);
   env->DeleteGlobalRef(arrow_record_batch_builder_class);
-  env->DeleteGlobalRef(partition_file_info_class);
   env->DeleteGlobalRef(split_result_class);
 
   buffer_holder_.Clear();
@@ -293,8 +277,14 @@ Java_com_intel_oap_vectorized_ExpressionEvaluatorJniWrapper_nativeBuild(
 #endif
 
   std::shared_ptr<CodeGenerator> handler;
-  msg = sparkcolumnarplugin::codegen::CreateCodeGenerator(schema, expr_vector, ret_types,
-                                                          &handler, return_when_finish);
+  try {
+    msg = sparkcolumnarplugin::codegen::CreateCodeGenerator(
+        schema, expr_vector, ret_types, &handler, return_when_finish);
+  } catch (const std::runtime_error& error) {
+    env->ThrowNew(unsupportedoperation_exception_class, error.what());
+  } catch (const std::exception& error) {
+    env->ThrowNew(io_exception_class, error.what());
+  }
   if (!msg.ok()) {
     std::string error_message =
         "nativeBuild: failed to create CodeGenerator, err msg is " + msg.message();
@@ -346,8 +336,14 @@ Java_com_intel_oap_vectorized_ExpressionEvaluatorJniWrapper_nativeBuildWithFinis
   }
 
   std::shared_ptr<CodeGenerator> handler;
-  msg = sparkcolumnarplugin::codegen::CreateCodeGenerator(
-      schema, expr_vector, ret_types, &handler, true, finish_expr_vector);
+  try {
+    msg = sparkcolumnarplugin::codegen::CreateCodeGenerator(
+        schema, expr_vector, ret_types, &handler, true, finish_expr_vector);
+  } catch (const std::runtime_error& error) {
+    env->ThrowNew(unsupportedoperation_exception_class, error.what());
+  } catch (const std::exception& error) {
+    env->ThrowNew(io_exception_class, error.what());
+  }
   if (!msg.ok()) {
     std::string error_message =
         "nativeBuild: failed to create CodeGenerator, err msg is " + msg.message();
@@ -1109,79 +1105,84 @@ Java_com_intel_oap_datasource_parquet_ParquetWriterJniWrapper_nativeWriteNext(
 JNIEXPORT jlong JNICALL
 Java_com_intel_oap_vectorized_ShuffleSplitterJniWrapper_nativeMake(
     JNIEnv* env, jobject, jstring partitioning_name_jstr, jint num_partitions,
-    jbyteArray schema_arr, jbyteArray expr_arr, jint buffer_size, jint num_sub_dirs, jstring local_dirs_jstr,
-    jstring codec_jstr) {
-  std::shared_ptr<arrow::Schema> schema;
-
-  auto status = MakeSchema(env, schema_arr, &schema);
-  if (!status.ok()) {
-    env->ThrowNew(
-        io_exception_class,
-        std::string("Failed to readSchema, err msg is " + status.message()).c_str());
+    jbyteArray schema_arr, jbyteArray expr_arr, jint buffer_size,
+    jstring compression_type_jstr, jstring data_file_jstr, jint num_sub_dirs,
+    jstring local_dirs_jstr) {
+  if (partitioning_name_jstr == NULL) {
+    env->ThrowNew(illegal_argument_exception_class,
+                  std::string("Short partitioning name can't be null").c_str());
+    return 0;
   }
+  if (schema_arr == NULL) {
+    env->ThrowNew(illegal_argument_exception_class,
+                  std::string("Make splitter schema can't be null").c_str());
+    return 0;
+  }
+  if (data_file_jstr == NULL) {
+    env->ThrowNew(illegal_argument_exception_class,
+                  std::string("Shuffle DataFile can't be null").c_str());
+    return 0;
+  }
+  if (local_dirs_jstr == NULL) {
+    env->ThrowNew(illegal_argument_exception_class,
+                  std::string("Shuffle DataFile can't be null").c_str());
+    return 0;
+  }
+
+  auto partitioning_name_c = env->GetStringUTFChars(partitioning_name_jstr, JNI_FALSE);
+  auto partitioning_name = std::string(partitioning_name_c);
+  env->ReleaseStringUTFChars(partitioning_name_jstr, partitioning_name_c);
+
+  auto splitOptions = SplitOptions::Defaults();
+  if (buffer_size > 0) {
+    splitOptions.buffer_size = buffer_size;
+  }
+  if (num_sub_dirs > 0) {
+    splitOptions.num_sub_dirs = num_sub_dirs;
+  }
+
+  if (compression_type_jstr != NULL) {
+    auto compression_type_result = GetCompressionType(env, compression_type_jstr);
+    if (compression_type_result.status().ok()) {
+      splitOptions.compression_type = compression_type_result.MoveValueUnsafe();
+    }
+  }
+
+  auto data_file_c = env->GetStringUTFChars(data_file_jstr, JNI_FALSE);
+  splitOptions.data_file = std::string(data_file_c);
+  env->ReleaseStringUTFChars(data_file_jstr, data_file_c);
 
   auto local_dirs = env->GetStringUTFChars(local_dirs_jstr, JNI_FALSE);
   setenv("NATIVESQL_SPARK_LOCAL_DIRS", local_dirs, 1);
   env->ReleaseStringUTFChars(local_dirs_jstr, local_dirs);
 
-  auto compression_type = arrow::Compression::UNCOMPRESSED;
-  if (codec_jstr != NULL) {
-    auto codec_l = env->GetStringUTFChars(codec_jstr, JNI_FALSE);
-    std::string codec_u;
-    std::transform(codec_l, codec_l + std::strlen(codec_l), std::back_inserter(codec_u),
-                   ::toupper);
+  std::shared_ptr<arrow::Schema> schema;
+  // ValueOrDie in MakeSchema
+  MakeSchema(env, schema_arr, &schema);
 
-    auto codec_result = arrow::util::Codec::GetCompressionType(codec_u);
-    if (!codec_result.ok()) {
-      std::string error_message = "Failed to get arrow compression type, err msg is " +
-                                  codec_result.status().message();
-      env->ThrowNew(io_exception_class, std::string("").c_str());
-    }
-    compression_type = *codec_result;
-
-    if (compression_type == arrow::Compression::LZ4) {
-      compression_type = arrow::Compression::LZ4_FRAME;
-    }
-    env->ReleaseStringUTFChars(codec_jstr, codec_l);
-  }
-
-  if (partitioning_name_jstr == NULL) {
-    env->ThrowNew(io_exception_class,
-                  std::string("short partitioning name is null").c_str());
-  }
-  auto partitioning_name_c = env->GetStringUTFChars(partitioning_name_jstr, JNI_FALSE);
-  auto partitioning_name = std::string(partitioning_name_c);
-
-  arrow::Result<std::shared_ptr<Splitter>> make_result;
-
+  gandiva::ExpressionVector expr_vector = {};
   if (expr_arr != NULL) {
-    gandiva::ExpressionVector expr_vector;
     gandiva::FieldVector ret_types;
-    auto msg = MakeExprVector(env, expr_arr, &expr_vector, &ret_types);
-    if (!msg.ok()) {
-      std::string error_message =
-          "Failed to parse expressions protobuf, err msg is " + msg.message();
-      env->ThrowNew(io_exception_class, error_message.c_str());
+    auto status = MakeExprVector(env, expr_arr, &expr_vector, &ret_types);
+    if (!status.ok()) {
+      env->ThrowNew(
+          illegal_argument_exception_class,
+          std::string("Failed to parse expressions protobuf, error message is " +
+                      status.message())
+              .c_str());
+      return 0;
     }
-    make_result =
-        Splitter::Make(partitioning_name, std::move(schema), (int32_t)num_partitions,
-                       std::move(expr_vector));
-  } else {
-    make_result =
-        Splitter::Make(partitioning_name, std::move(schema), (int32_t)num_partitions);
   }
-
+  auto make_result = Splitter::Make(partitioning_name, std::move(schema), num_partitions,
+                                    expr_vector, std::move(splitOptions));
   if (!make_result.ok()) {
-    std::string error_message = "Failed create native shuffle splitter, err msg is " +
-                                make_result.status().message();
-    env->ThrowNew(io_exception_class, std::string("").c_str());
+    env->ThrowNew(illegal_argument_exception_class,
+                  std::string("Failed create native shuffle splitter, error message is " +
+                              make_result.status().message())
+                      .c_str());
+    return 0;
   }
-  auto splitter = std::move(*make_result);
-  splitter->set_compression_type(compression_type);
-  splitter->set_buffer_size((int32_t)buffer_size);
-  splitter->set_num_sub_dirs((int32_t)num_sub_dirs);
-
-  env->ReleaseStringUTFChars(partitioning_name_jstr, partitioning_name_c);
+  auto splitter = make_result.MoveValueUnsafe();
 
   return shuffle_splitter_holder_.Insert(std::shared_ptr<Splitter>(splitter));
 }
@@ -1189,14 +1190,31 @@ Java_com_intel_oap_vectorized_ShuffleSplitterJniWrapper_nativeMake(
 JNIEXPORT void JNICALL Java_com_intel_oap_vectorized_ShuffleSplitterJniWrapper_split(
     JNIEnv* env, jobject, jlong splitter_id, jint num_rows, jlongArray buf_addrs,
     jlongArray buf_sizes) {
-  auto splitter = GetShuffleSplitter(env, splitter_id);
+  auto splitter = shuffle_splitter_holder_.Lookup(splitter_id);
+  if (!splitter) {
+    std::string error_message = "Invalid splitter id " + std::to_string(splitter_id);
+    env->ThrowNew(illegal_argument_exception_class, error_message.c_str());
+    return;
+  }
+  if (buf_addrs == NULL) {
+    env->ThrowNew(illegal_argument_exception_class,
+                  std::string("Native split: buf_addrs can't be null").c_str());
+    return;
+  }
+  if (buf_sizes == NULL) {
+    env->ThrowNew(illegal_argument_exception_class,
+                  std::string("Native split: buf_sizes can't be null").c_str());
+    return;
+  }
 
   int in_bufs_len = env->GetArrayLength(buf_addrs);
   if (in_bufs_len != env->GetArrayLength(buf_sizes)) {
-    std::string error_message =
-        "native split: mismatch in arraylen of buf_addrs and buf_sizes";
-    env->ThrowNew(io_exception_class, error_message.c_str());
+    env->ThrowNew(
+        illegal_argument_exception_class,
+        std::string("Native split: length of buf_addrs and buf_sizes mismatch").c_str());
+    return;
   }
+
   jlong* in_buf_addrs = env->GetLongArrayElements(buf_addrs, JNI_FALSE);
   jlong* in_buf_sizes = env->GetLongArrayElements(buf_sizes, JNI_FALSE);
 
@@ -1208,58 +1226,53 @@ JNIEXPORT void JNICALL Java_com_intel_oap_vectorized_ShuffleSplitterJniWrapper_s
   env->ReleaseLongArrayElements(buf_sizes, in_buf_sizes, JNI_ABORT);
 
   if (!status.ok()) {
-    env->ThrowNew(io_exception_class,
-                  std::string("native split: make record batch failed").c_str());
+    env->ThrowNew(
+        illegal_argument_exception_class,
+        std::string("Native split: make record batch failed, error message is " +
+                    status.message())
+            .c_str());
+    return;
   }
 
   status = splitter->Split(*in);
 
   if (!status.ok()) {
+    // Throw IOException
     env->ThrowNew(io_exception_class,
-                  std::string("native split: splitter split failed").c_str());
+                  std::string("Native split: splitter split failed, error message is " +
+                              status.message())
+                      .c_str());
   }
 }
 
 JNIEXPORT jobject JNICALL Java_com_intel_oap_vectorized_ShuffleSplitterJniWrapper_stop(
     JNIEnv* env, jobject, jlong splitter_id) {
-  auto splitter = GetShuffleSplitter(env, splitter_id);
-  auto stop_status = splitter->Stop();
+  auto splitter = shuffle_splitter_holder_.Lookup(splitter_id);
+  if (!splitter) {
+    std::string error_message = "Invalid splitter id " + std::to_string(splitter_id);
+    env->ThrowNew(illegal_argument_exception_class, error_message.c_str());
+    return nullptr;
+  }
 
-  if (!stop_status.ok()) {
+  auto status = splitter->Stop();
+
+  if (!status.ok()) {
+    // Throw IOException
     env->ThrowNew(io_exception_class,
-                  std::string("native split: splitter stop failed, error message is " +
-                              stop_status.message())
+                  std::string("Native split: splitter stop failed, error message is " +
+                              status.message())
                       .c_str());
+    return nullptr;
   }
 
-  // TotalComputePidTime
-  auto compute_pid_time = static_cast<jlong>(splitter->TotalComputePidTime());
-
-  // TotalWriteTime
-  auto write_time = static_cast<jlong>(splitter->TotalWriteTime());
-
-  // TotalBytesWritten
-  auto bytes_written = static_cast<jlong>(splitter->TotalBytesWritten());
-
-  // GetPartitionFileInfo
-  const auto& partition_file_info = splitter->GetPartitionFileInfo();
-  auto valid_num_partitions = partition_file_info.size();
-
-  jobjectArray partition_file_info_array =
-      env->NewObjectArray(valid_num_partitions, partition_file_info_class, nullptr);
-
-  for (auto i = 0; i < valid_num_partitions; ++i) {
-    jobject file_info_obj =
-        env->NewObject(partition_file_info_class, partition_file_info_constructor,
-                       partition_file_info[i].first,
-                       env->NewStringUTF(partition_file_info[i].second.c_str()));
-    env->SetObjectArrayElement(partition_file_info_array, i, file_info_obj);
-  }
-
-  // build SplitResult
-  jobject split_result =
-      env->NewObject(split_result_class, split_result_constructor, compute_pid_time, write_time,
-                     bytes_written, partition_file_info_array);
+  const auto& partition_length = splitter->PartitionLengths();
+  auto partition_length_arr = env->NewLongArray(partition_length.size());
+  auto src = reinterpret_cast<const jlong*>(partition_length.data());
+  env->SetLongArrayRegion(partition_length_arr, 0, partition_length.size(), src);
+  jobject split_result = env->NewObject(
+      split_result_class, split_result_constructor, splitter->TotalComputePidTime(),
+      splitter->TotalWriteTime(), splitter->TotalSpillTime(),
+      splitter->TotalBytesWritten(), splitter->TotalBytesSpilled(), partition_length_arr);
 
   return split_result;
 }
@@ -1272,117 +1285,104 @@ JNIEXPORT void JNICALL Java_com_intel_oap_vectorized_ShuffleSplitterJniWrapper_c
 JNIEXPORT jlong JNICALL Java_com_intel_oap_vectorized_ShuffleDecompressionJniWrapper_make(
     JNIEnv* env, jobject, jbyteArray schema_arr) {
   std::shared_ptr<arrow::Schema> schema;
-  arrow::Status status;
-
-  status = MakeSchema(env, schema_arr, &schema);
-  if (!status.ok()) {
-    env->ThrowNew(
-        io_exception_class,
-        std::string("failed to readSchema, err msg is " + status.message()).c_str());
-  }
+  // ValueOrDie in MakeSchema
+  MakeSchema(env, schema_arr, &schema);
 
   return decompression_schema_holder_.Insert(schema);
 }
 
 JNIEXPORT jobject JNICALL
 Java_com_intel_oap_vectorized_ShuffleDecompressionJniWrapper_decompress(
-    JNIEnv* env, jobject obj, jlong schema_holder_id, jstring codec_jstr, jint num_rows,
-    jlongArray buf_addrs, jlongArray buf_sizes, jlongArray buf_mask) {
+    JNIEnv* env, jobject obj, jlong schema_holder_id, jstring compression_type_jstr,
+    jint num_rows, jlongArray buf_addrs, jlongArray buf_sizes, jlongArray buf_mask) {
   auto schema = decompression_schema_holder_.Lookup(schema_holder_id);
+  if (!schema) {
+    std::string error_message =
+        "Invalid schema holder id " + std::to_string(schema_holder_id);
+    env->ThrowNew(illegal_argument_exception_class, error_message.c_str());
+    return nullptr;
+  }
+  if (buf_addrs == NULL) {
+    env->ThrowNew(illegal_argument_exception_class,
+                  std::string("Native decompress: buf_addrs can't be null").c_str());
+    return nullptr;
+  }
+  if (buf_sizes == NULL) {
+    env->ThrowNew(illegal_argument_exception_class,
+                  std::string("Native decompress: buf_sizes can't be null").c_str());
+    return nullptr;
+  }
+  if (buf_mask == NULL) {
+    env->ThrowNew(illegal_argument_exception_class,
+                  std::string("Native decompress: buf_mask can't be null").c_str());
+    return nullptr;
+  }
 
   int in_bufs_len = env->GetArrayLength(buf_addrs);
   if (in_bufs_len != env->GetArrayLength(buf_sizes)) {
-    std::string error_message =
-        "native decompress: mismatch in arraylen of buf_addrs and buf_sizes";
-    env->ThrowNew(io_exception_class, error_message.c_str());
+    env->ThrowNew(
+        illegal_argument_exception_class,
+        std::string("Native decompress: length of buf_addrs and buf_sizes mismatch")
+            .c_str());
+    return nullptr;
   }
 
+  auto compression_type = arrow::Compression::UNCOMPRESSED;
+  if (compression_type_jstr != NULL) {
+    auto compression_type_result = GetCompressionType(env, compression_type_jstr);
+    if (compression_type_result.status().ok()) {
+      compression_type = compression_type_result.MoveValueUnsafe();
+    }
+  }
+
+  // make buffers from raws
   auto in_buf_addrs = env->GetLongArrayElements(buf_addrs, JNI_FALSE);
   auto in_buf_sizes = env->GetLongArrayElements(buf_sizes, JNI_FALSE);
   auto in_buf_mask = env->GetLongArrayElements(buf_mask, JNI_FALSE);
-  int buf_idx = 0;
-  int field_idx = 0;
 
-  // get decompression compression_codec
-  auto compression_codec = arrow::Compression::UNCOMPRESSED;
-  if (codec_jstr != NULL) {
-    auto codec_l = env->GetStringUTFChars(codec_jstr, JNI_FALSE);
-    std::string codec_u;
-    std::transform(codec_l, codec_l + std::strlen(codec_l), std::back_inserter(codec_u),
-                   ::toupper);
-    auto result = arrow::util::Codec::GetCompressionType(codec_u);
-    if (result.ok()) {
-      compression_codec = *result;
-    } else {
-      env->ThrowNew(io_exception_class,
-                    std::string("failed to get compression codec, error message is " +
-                                result.status().message())
-                        .c_str());
+  auto num_fields = schema->num_fields();
+
+  std::vector<std::shared_ptr<arrow::Buffer>> input_buffers;
+  input_buffers.reserve(in_bufs_len);
+  for (auto field_idx = 0, buffer_idx = 0; field_idx < num_fields; ++field_idx) {
+    auto field = schema->field(field_idx);
+    auto num_buf = arrow::is_base_binary_like(field->type()->id()) ? 3 : 2;
+    for (auto i = 0; i < num_buf; ++i, ++buffer_idx) {
+      input_buffers.push_back(std::make_shared<arrow::Buffer>(
+          reinterpret_cast<const uint8_t*>(in_buf_addrs[buffer_idx]),
+          in_buf_sizes[buffer_idx]));
     }
-    if (compression_codec == arrow::Compression::LZ4) {
-      compression_codec = arrow::Compression::LZ4_FRAME;
-    }
-    env->ReleaseStringUTFChars(codec_jstr, codec_l);
   }
 
-  std::vector<std::shared_ptr<arrow::ArrayData>> arrays;
-  while (field_idx < schema->num_fields()) {
-    auto field = schema->field(field_idx);
-    std::vector<std::shared_ptr<arrow::Buffer>> buffers;
-
-    // decompress validity buffer
-    auto result = arrow::BitUtil::GetBit((uint8_t*)in_buf_mask, buf_idx)
-                      ? DecompressBuffer(in_buf_addrs[buf_idx], in_buf_sizes[buf_idx],
-                                         arrow::Compression::UNCOMPRESSED)
-                      : DecompressBuffer(in_buf_addrs[buf_idx], in_buf_sizes[buf_idx],
-                                         compression_codec);
-    if (result.ok()) {
-      buffers.push_back(std::move(result).ValueOrDie());
-    } else {
-      env->ThrowNew(
-          io_exception_class,
-          std::string("failed to decompress validity buffer, error message is " +
-                      result.status().message())
-              .c_str());
-    }
-
-    // decompress value buffer
-    result = DecompressBuffer(in_buf_addrs[buf_idx + 1], in_buf_sizes[buf_idx + 1],
-                              compression_codec);
-    if (result.ok()) {
-      buffers.push_back(std::move(result).ValueOrDie());
-    } else {
-      env->ThrowNew(io_exception_class,
-                    std::string("failed to decompress value buffer, error message is " +
-                                result.status().message())
-                        .c_str());
-    }
-
-    if (arrow::is_binary_like(field->type()->id())) {
-      // decompress offset buffer
-      result = DecompressBuffer(in_buf_addrs[buf_idx + 2], in_buf_sizes[buf_idx + 2],
-                                compression_codec);
-      if (result.ok()) {
-        buffers.push_back(std::move(result).ValueOrDie());
-      } else {
-        env->ThrowNew(
-            io_exception_class,
-            std::string("failed to decompress offset buffer, error message is " +
-                        result.status().message())
-                .c_str());
-      }
-      buf_idx += 3;
-    } else {
-      buf_idx += 2;
-    }
-    arrays.push_back(arrow::ArrayData::Make(field->type(), num_rows, std::move(buffers)));
-
-    ++field_idx;
+  // decompress buffers
+  auto options = arrow::ipc::IpcReadOptions::Defaults();
+  options.use_threads = false;
+  auto status =
+      DecompressBuffers(compression_type, options, (uint8_t*)in_buf_mask, input_buffers);
+  if (!status.ok()) {
+    env->ThrowNew(
+        io_exception_class,
+        std::string("failed to decompress buffers, error message is " + status.message())
+            .c_str());
   }
 
   env->ReleaseLongArrayElements(buf_addrs, in_buf_addrs, JNI_ABORT);
   env->ReleaseLongArrayElements(buf_sizes, in_buf_sizes, JNI_ABORT);
   env->ReleaseLongArrayElements(buf_mask, in_buf_mask, JNI_ABORT);
+
+  // make arrays from buffers
+  std::vector<std::shared_ptr<arrow::ArrayData>> arrays;
+  for (auto field_idx = 0, buffer_idx = 0; field_idx < num_fields; ++field_idx) {
+    auto field = schema->field(field_idx);
+    auto num_buf = arrow::is_base_binary_like(field->type()->id()) ? 3 : 2;
+
+    std::vector<std::shared_ptr<arrow::Buffer>> bufs;
+    bufs.reserve(num_buf);
+    for (auto i = 0; i < num_buf; ++i, ++buffer_idx) {
+      bufs.push_back(std::move(input_buffers[buffer_idx]));
+    }
+    arrays.push_back(arrow::ArrayData::Make(field->type(), num_rows, std::move(bufs)));
+  }
 
   return MakeRecordBatchBuilder(
       env, schema, arrow::RecordBatch::Make(schema, num_rows, std::move(arrays)));

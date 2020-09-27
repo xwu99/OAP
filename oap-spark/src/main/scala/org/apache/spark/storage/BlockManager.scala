@@ -180,6 +180,45 @@ private[spark] class BlockManager(
   // same as `conf.get(config.SHUFFLE_SERVICE_ENABLED)`
   private[spark] val externalShuffleServiceEnabled: Boolean = externalBlockStoreClient.isDefined
 
+  val isDriver = executorId == SparkContext.DRIVER_IDENTIFIER
+
+  var numaNodeId = conf.getInt("spark.executor.numa.id", -1)
+  val pmemInitialPaths = conf.get("spark.memory.pmem.initial.path", "").split(",")
+  val pmemInitialSize = conf.getSizeAsBytes("spark.memory.pmem.initial.size", 0L)
+  val pmemMode = conf.get("spark.memory.pmem.mode", "AppDirect")
+  val numNum = conf.getInt("spark.yarn.numa.num", 2)
+
+  if (pmemMode.equals("AppDirect")) {
+    if (!isDriver && pmemInitialPaths.size > 1) {
+      if (numaNodeId == -1) {
+        numaNodeId = executorId.toInt
+      }
+      val path = pmemInitialPaths(numaNodeId % 2)
+      val initPath = path + File.separator + s"executor_${executorId}" + File.pathSeparator
+      val file = new File(initPath)
+      if (file.exists() && file.isFile) {
+        file.delete()
+      }
+
+      if (!file.exists()) {
+        file.mkdirs()
+      }
+
+      require(file.isDirectory(), "PMem directory is required for initialization")
+      PersistentMemoryPlatform.initialize(initPath, pmemInitialSize, 0)
+      logInfo(s"Intel Optane PMem initialized with path: ${initPath}, size: ${pmemInitialSize} ")
+    }
+  } else if (pmemMode.equals("KMemDax")) {
+    if (!isDriver) {
+      if (numaNodeId == -1) {
+        numaNodeId = (executorId.toInt + 1) % 2
+      }
+      val daxNodeId = numaNodeId + numNum
+      PersistentMemoryPlatform.setNUMANode(String.valueOf(daxNodeId), String.valueOf(numaNodeId))
+      PersistentMemoryPlatform.initialize()
+    }
+  }
+
   private val remoteReadNioBufferConversion =
     conf.get(Network.NETWORK_REMOTE_READ_NIO_BUFFER_CONVERSION)
 
@@ -1242,6 +1281,22 @@ private[spark] class BlockManager(
       writeMetrics: ShuffleWriteMetricsReporter): DiskBlockObjectWriter = {
     val syncWrites = conf.get(config.SHUFFLE_SYNC)
     new DiskBlockObjectWriter(file, serializerManager, serializerInstance, bufferSize,
+      syncWrites, writeMetrics, blockId)
+  }
+
+  /**
+    * A short circuited method to get a PMem writer that can write data directly to PMem.
+    * The Block will be appended to the PMem stream specified by filename. Callers should handle
+    * error cases.
+    */
+  def getPMemWriter(
+                     blockId: BlockId,
+                     file: File,
+                     serializerInstance: SerializerInstance,
+                     bufferSize: Int,
+                     writeMetrics: ShuffleWriteMetricsReporter): PMemBlockObjectWriter = {
+    val syncWrites = conf.getBoolean("spark.shuffle.sync", false)
+    new PMemBlockObjectWriter(file, serializerManager, serializerInstance, bufferSize,
       syncWrites, writeMetrics, blockId)
   }
 

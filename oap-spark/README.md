@@ -47,7 +47,7 @@ The following are required to configure OAP to use PMem cache in AppDirect mode.
 
    In this case file systems are generated for 2 numa nodes, which can be checked by "numactl --hardware". For a different number of numa nodes, a corresponding number of namespaces should be created to assure correct file system paths mapping to numa nodes.
 
-- Make sure [Memkind](https://github.com/memkind/memkind/tree/v1.10.1-rc2) library installed on every cluster worker node. Compile Memkind based on your system or directly place our pre-built binary of [libmemkind.so.0](https://github.com/Intel-bigdata/OAP/releases/download/v0.8.2-spark-2.4.4/libmemkind.so.0) for x86 64bit CentOS Linux in the `/lib64/`directory of each worker node in cluster.
+- Make sure [Memkind](https://github.com/memkind/memkind/tree/v1.10.1-rc2) library installed on every cluster worker node. Compile Memkind based on your system or directly place our pre-built binary of [libmemkind.so.0](https://github.com/Intel-bigdata/OAP/releases/download/v0.9.0-spark-3.0.0/libmemkind.so.0) for x86 64bit CentOS Linux in the `/lib64/`directory of each worker node in cluster.
    The Memkind library depends on `libnuma` at the runtime, so it must already exist in the worker node system.
    Build the latest memkind lib from source:
 
@@ -152,15 +152,17 @@ For the scenario that data will exceed the block cache capacity. Memkind 1.9.0 a
 
 ### How to contribute
 
-OAP Spark packages includes all Spark changed files. All codes are directly copied from
-https://github.com/Intel-bigdata/Spark. Please make sure all your changes are committed to the
-repository above. Otherwise, your change will be override by others.
+Currently, OAP Spark packages includes all Spark changed files.
+
+* MemoryMode.java
+* MemoryManager.scala
+* StorageMemoryPool.scala
+* UnifiedMemoryManager.scala
+* MemoryStore.scala
+* BlockManager.scala
+* StorageLevel.scala
+* TestMemoryManager
+
+Please make sure your code change in above source code will not break current function.
 
 The files from this package should avoid depending on other OAP module except OAP-Common.
-
-All Spark source code changes are tracked in dev/changes_list/spark_changed_files
-
-All changed files are ordered by file name.
-
-You can execute the script dev/Apply_Spark_changes.sh with the specified Spark source directories
-and OAP source directories accordingly.

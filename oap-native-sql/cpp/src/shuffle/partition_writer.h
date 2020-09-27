@@ -17,14 +17,16 @@
 
 #pragma once
 
+#include <chrono>
+#include <vector>
+
 #include <arrow/array/builder_binary.h>
 #include <arrow/buffer.h>
 #include <arrow/io/file.h>
 #include <arrow/ipc/writer.h>
 #include <arrow/status.h>
 #include <arrow/util/compression.h>
-#include <chrono>
-#include <vector>
+
 #include "shuffle/type.h"
 #include "utils/macros.h"
 
@@ -37,9 +39,10 @@ template <typename T>
 arrow::Status inline Write(const SrcBuffers& src, int64_t src_offset,
                            const BufferInfos& dst, int64_t dst_offset) {
   for (size_t i = 0; i < src.size(); ++i) {
-    dst[i]->validity_addr[dst_offset / 8] |=
-        (((src[i].validity_addr)[src_offset / 8] >> (src_offset % 8)) & 1)
-        << (dst_offset % 8);
+    if (dst[i]->validity_addr[dst_offset / 8] >> dst_offset % 8 & 1 ^
+        (src[i].validity_addr)[src_offset / 8] >> src_offset % 8 & 1) {
+      dst[i]->validity_addr[dst_offset / 8] ^= 1 << dst_offset % 8;
+    }
     reinterpret_cast<T*>(dst[i]->value_addr)[dst_offset] =
         reinterpret_cast<T*>(src[i].value_addr)[src_offset];
   }
@@ -50,12 +53,29 @@ template <>
 arrow::Status inline Write<bool>(const SrcBuffers& src, int64_t src_offset,
                                  const BufferInfos& dst, int64_t dst_offset) {
   for (size_t i = 0; i < src.size(); ++i) {
-    dst[i]->validity_addr[dst_offset / 8] |=
-        (((src[i].validity_addr)[src_offset / 8] >> (src_offset % 8)) & 1)
-        << (dst_offset % 8);
-    dst[i]->value_addr[dst_offset / 8] |=
-        (((src[i].value_addr)[src_offset / 8] >> (src_offset % 8)) & 1)
-        << (dst_offset % 8);
+    if (dst[i]->validity_addr[dst_offset / 8] >> dst_offset % 8 & 1 ^
+        (src[i].validity_addr)[src_offset / 8] >> src_offset % 8 & 1) {
+      dst[i]->validity_addr[dst_offset / 8] ^= 1 << dst_offset % 8;
+    }
+    if (dst[i]->value_addr[dst_offset / 8] >> dst_offset % 8 & 1 ^
+        (src[i].value_addr)[src_offset / 8] >> src_offset % 8 & 1) {
+      dst[i]->value_addr[dst_offset / 8] ^= 1 << dst_offset % 8;
+    }
+  }
+  return arrow::Status::OK();
+}
+
+arrow::Status inline WriteDecimal128(const SrcBuffers& src, int64_t src_offset,
+                                     const BufferInfos& dst, int64_t dst_offset) {
+  for (size_t i = 0; i < src.size(); ++i) {
+    if (dst[i]->validity_addr[dst_offset / 8] >> dst_offset % 8 & 1 ^
+        (src[i].validity_addr)[src_offset / 8] >> src_offset % 8 & 1) {
+      dst[i]->validity_addr[dst_offset / 8] ^= 1 << dst_offset % 8;
+    }
+    reinterpret_cast<uint64_t*>(dst[i]->value_addr)[dst_offset << 1] =
+        reinterpret_cast<uint64_t*>(src[i].value_addr)[src_offset << 1];
+    reinterpret_cast<int64_t*>(dst[i]->value_addr)[dst_offset << 1 | 1] =
+        reinterpret_cast<int64_t*>(src[i].value_addr)[src_offset << 1 | 1];
   }
   return arrow::Status::OK();
 }
@@ -63,21 +83,6 @@ arrow::Status inline Write<bool>(const SrcBuffers& src, int64_t src_offset,
 template <typename T, typename ArrayType = typename arrow::TypeTraits<T>::ArrayType,
           typename BuilderType = typename arrow::TypeTraits<T>::BuilderType>
 arrow::enable_if_binary_like<T, arrow::Status> inline WriteBinary(
-    const std::vector<std::shared_ptr<ArrayType>>& src, int64_t offset,
-    const std::deque<std::unique_ptr<BuilderType>>& builders) {
-  using offset_type = typename T::offset_type;
-
-  for (size_t i = 0; i < src.size(); ++i) {
-    offset_type length;
-    auto value = src[i]->GetValue(offset, &length);
-    RETURN_NOT_OK(builders[i]->Append(value, length));
-  }
-  return arrow::Status::OK();
-}
-
-template <typename T, typename ArrayType = typename arrow::TypeTraits<T>::ArrayType,
-          typename BuilderType = typename arrow::TypeTraits<T>::BuilderType>
-arrow::enable_if_binary_like<T, arrow::Status> inline WriteNullableBinary(
     const std::vector<std::shared_ptr<ArrayType>>& src, int64_t offset,
     const std::deque<std::unique_ptr<BuilderType>>& builders) {
   using offset_type = typename T::offset_type;
@@ -95,70 +100,53 @@ arrow::enable_if_binary_like<T, arrow::Status> inline WriteNullableBinary(
   return arrow::Status::OK();
 }
 
-arrow::Status inline WriteDecimal128(const SrcBuffers& src, int64_t src_offset,
-                                     const BufferInfos& dst, int64_t dst_offset) {
-  for (size_t i = 0; i < src.size(); ++i) {
-    dst[i]->validity_addr[dst_offset / 8] |=
-        (((src[i].validity_addr)[src_offset / 8] >> (src_offset % 8)) & 1)
-        << (dst_offset % 8);
-    reinterpret_cast<uint64_t*>(dst[i]->value_addr)[dst_offset << 1] =
-        reinterpret_cast<uint64_t*>(src[i].value_addr)[src_offset << 1];
-    reinterpret_cast<uint64_t*>(dst[i]->value_addr)[dst_offset << 1 | 1] =
-        reinterpret_cast<uint64_t*>(src[i].value_addr)[src_offset << 1 | 1];
-  }
-  return arrow::Status::OK();
-}
-
 }  // namespace detail
 class PartitionWriter {
  public:
-  explicit PartitionWriter(int32_t pid, int64_t capacity, Type::typeId last_type,
-                           const std::vector<Type::typeId>& column_type_id,
-                           const std::shared_ptr<arrow::Schema>& schema,
-                           std::shared_ptr<arrow::io::FileOutputStream> file_os,
-                           TypeBufferInfos buffers, BinaryBuilders binary_builders,
-                           LargeBinaryBuilders large_binary_builders,
-                           arrow::Compression::type compression_codec)
-      : pid_(pid),
+  PartitionWriter(int32_t partition_id, int64_t capacity,
+                  arrow::Compression::type compression_type, Type::typeId last_type,
+                  const std::vector<Type::typeId>& column_type_id,
+                  const std::shared_ptr<arrow::Schema>& schema,
+                  const std::shared_ptr<arrow::io::FileOutputStream>& data_file_os,
+                  std::string spilled_file_dir, TypeBufferInfos buffers,
+                  BinaryBuilders binary_builders,
+                  LargeBinaryBuilders large_binary_builders)
+      : partition_id_(partition_id),
         capacity_(capacity),
+        compression_type_(compression_type),
         last_type_(last_type),
         column_type_id_(column_type_id),
         schema_(schema),
-        file_os_(std::move(file_os)),
+        data_file_os_(data_file_os),
+        spilled_file_dir_(std::move(spilled_file_dir)),
         buffers_(std::move(buffers)),
         binary_builders_(std::move(binary_builders)),
         large_binary_builders_(std::move(large_binary_builders)),
-        compression_type_(compression_codec),
-        write_offset_(Type::typeId::NUM_TYPES),
-        file_footer_(0),
-        file_writer_opened_(false),
-        file_writer_(nullptr),
-        write_time_(0) {}
+        write_offset_(Type::typeId::NUM_TYPES) {}
 
   static arrow::Result<std::shared_ptr<PartitionWriter>> Create(
-      int32_t pid, int64_t capacity, Type::typeId last_type,
-      const std::vector<Type::typeId>& column_type_id,
-      const std::shared_ptr<arrow::Schema>& schema, const std::string& temp_file_path,
-      arrow::Compression::type compression_type);
+      int32_t partition_id, int64_t capacity, arrow::Compression::type compression_type,
+      Type::typeId last_type, const std::vector<Type::typeId>& column_type_id,
+      const std::shared_ptr<arrow::Schema>& schema,
+      const std::shared_ptr<arrow::io::FileOutputStream>& data_file_os,
+      std::string spilled_file_dir);
 
   arrow::Status Stop();
 
-  arrow::Status WriteArrowRecordBatch();
-
   int64_t GetWriteTime() const { return write_time_; }
 
-  arrow::Result<int64_t> GetBytesWritten() {
-    if (!file_os_->closed()) {
-      ARROW_ASSIGN_OR_RAISE(file_footer_, file_os_->Tell());
-    }
-    return file_footer_;
-  }
+  int64_t GetSpillTime() const { return spill_time_; }
+
+  int64_t GetPartitionLength() const { return partition_length_; }
+
+  int64_t GetBytesSpilled() const { return bytes_spilled_; }
 
   arrow::Result<bool> inline CheckTypeWriteEnds(const Type::typeId& type_id) {
     if (write_offset_[type_id] == capacity_) {
       if (type_id == last_type_) {
-        TIME_NANO_OR_RAISE(write_time_, WriteArrowRecordBatch());
-        std::fill(std::begin(write_offset_), std::end(write_offset_), 0);
+        // Write to spilled file, close the file but don't call RecordBatchWriter.Close()
+        // since it may not be the last batch to write
+        TIME_NANO_OR_RAISE(spill_time_, Spill());
       }
       return true;
     }
@@ -224,41 +212,6 @@ class PartitionWriter {
     ++write_offset_[Type::SHUFFLE_LARGE_BINARY];
     return true;
   }
-  /// Do memory copy for binary type
-  /// \param src source binary array
-  /// \param offset index of the element in source binary array
-  /// \return
-  arrow::Result<bool> inline WriteNullableBinary(
-      const std::vector<std::shared_ptr<arrow::BinaryArray>>& src, int64_t offset) {
-    ARROW_ASSIGN_OR_RAISE(auto write_ends, CheckTypeWriteEnds(Type::SHUFFLE_BINARY))
-    if (write_ends) {
-      return false;
-    }
-
-    RETURN_NOT_OK(
-        detail::WriteNullableBinary<arrow::BinaryType>(src, offset, binary_builders_));
-
-    ++write_offset_[Type::SHUFFLE_BINARY];
-    return true;
-  }
-
-  /// Do memory copy for large binary type
-  /// \param src source binary array
-  /// \param offset index of the element in source binary array
-  /// \return
-  arrow::Result<bool> inline WriteNullableLargeBinary(
-      const std::vector<std::shared_ptr<arrow::LargeBinaryArray>>& src, int64_t offset) {
-    ARROW_ASSIGN_OR_RAISE(auto write_ends, CheckTypeWriteEnds(Type::SHUFFLE_LARGE_BINARY))
-    if (write_ends) {
-      return false;
-    }
-
-    RETURN_NOT_OK(detail::WriteNullableBinary<arrow::LargeBinaryType>(
-        src, offset, large_binary_builders_));
-
-    ++write_offset_[Type::SHUFFLE_LARGE_BINARY];
-    return true;
-  }
 
   /// Do memory copy for decimal
   /// \param src source buffers
@@ -272,33 +225,44 @@ class PartitionWriter {
       return false;
     }
 
-    RETURN_NOT_OK(
-        detail::WriteDecimal128(src, offset, buffers_[Type::SHUFFLE_DECIMAL128], write_offset_[Type::SHUFFLE_DECIMAL128]));
+    RETURN_NOT_OK(detail::WriteDecimal128(src, offset, buffers_[Type::SHUFFLE_DECIMAL128],
+                                          write_offset_[Type::SHUFFLE_DECIMAL128]));
 
     ++write_offset_[Type::SHUFFLE_DECIMAL128];
     return true;
   }
 
  private:
-  const int32_t pid_;
+  arrow::Status Spill();
+
+  arrow::Result<std::shared_ptr<arrow::RecordBatch>> MakeRecordBatchAndReset();
+
+  const int32_t partition_id_;
   const int64_t capacity_;
+  const arrow::Compression::type compression_type_;
   const Type::typeId last_type_;
+
+  // hold references to splitter
   const std::vector<Type::typeId>& column_type_id_;
   const std::shared_ptr<arrow::Schema>& schema_;
-  std::shared_ptr<arrow::io::FileOutputStream> file_os_;
+  const std::shared_ptr<arrow::io::FileOutputStream>& data_file_os_;
+
+  std::string spilled_file_dir_;
 
   TypeBufferInfos buffers_;
   BinaryBuilders binary_builders_;
   LargeBinaryBuilders large_binary_builders_;
 
-  arrow::Compression::type compression_type_;
-
   std::vector<int64_t> write_offset_;
-  int64_t file_footer_;
-  bool file_writer_opened_;
-  std::shared_ptr<arrow::ipc::RecordBatchWriter> file_writer_;
 
-  int64_t write_time_;
+  int64_t write_time_ = 0;
+  int64_t spill_time_ = 0;
+  int64_t partition_length_ = 0;
+  int64_t bytes_spilled_ = 0;
+
+  std::string spilled_file_;
+  std::shared_ptr<arrow::io::FileOutputStream> spilled_file_os_;
+  std::shared_ptr<arrow::ipc::RecordBatchWriter> spilled_file_writer_;
 };
 
 }  // namespace shuffle

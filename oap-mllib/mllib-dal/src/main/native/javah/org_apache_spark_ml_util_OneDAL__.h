@@ -47,6 +47,14 @@ JNIEXPORT void JNICALL Java_org_apache_spark_ml_util_OneDAL_00024_cSetDoubleIter
 JNIEXPORT void JNICALL Java_org_apache_spark_ml_util_OneDAL_00024_cFreeDataMemory
   (JNIEnv *, jobject, jlong);
 
+/*
+ * Class:     org_apache_spark_ml_util_OneDAL__
+ * Method:    cCheckPlatformCompatibility
+ * Signature: ()Z
+ */
+JNIEXPORT jboolean JNICALL Java_org_apache_spark_ml_util_OneDAL_00024_cCheckPlatformCompatibility
+  (JNIEnv *, jobject);
+
 #ifdef __cplusplus
 }
 #endif

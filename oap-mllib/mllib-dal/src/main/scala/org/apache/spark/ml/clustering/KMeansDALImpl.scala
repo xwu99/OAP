@@ -71,8 +71,8 @@ class KMeansDALImpl (
       val matrix = new DALMatrix(context, classOf[java.lang.Double],
         numCols.toLong, numRows.toLong, NumericTable.AllocationFlag.DoAllocate)
 
-      println("KMeansDALImpl: Loading libMLlibDAL.so" )
-      // oneDAL libs should be loaded by now, extract libMLlibDAL.so to temp file and load
+      println("KMeansDALImpl: Loading native libraries" )
+      // oneDAL libs should be loaded by now, loading all native libraries
       LibLoader.loadLibraries()
 
       var dalRow = 0

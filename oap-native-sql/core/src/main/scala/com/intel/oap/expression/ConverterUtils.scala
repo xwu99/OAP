@@ -39,6 +39,7 @@ import org.apache.arrow.vector.ipc.message.{
   MessageSerializer,
   MessageChannelReader
 }
+import org.apache.arrow.vector.types.pojo.ArrowType
 import org.apache.arrow.vector.types.pojo.Field
 import org.apache.arrow.vector.types.pojo.Schema
 import org.apache.arrow.gandiva.expression._
@@ -109,7 +110,8 @@ object ConverterUtils extends Logging {
   }
 
   def convertToNetty(iter: Array[ColumnarBatch]): Array[Byte] = {
-    val out = new ByteBufOutputStream(ByteBufAllocator.DEFAULT.buffer());
+    val innerBuf = ByteBufAllocator.DEFAULT.buffer()
+    val out = new ByteBufOutputStream(innerBuf)
     val channel = new WriteChannel(Channels.newChannel(out))
     var schema: Schema = null
     val option = new IpcOption
@@ -131,6 +133,7 @@ object ConverterUtils extends Logging {
     val buf = out.buffer
     val bytes = new Array[Byte](buf.readableBytes);
     buf.getBytes(buf.readerIndex, bytes);
+    innerBuf.release()
     out.close()
     bytes
   }
@@ -312,7 +315,7 @@ object ConverterUtils extends Logging {
     }
   }
 
-  def getColumnarFuncNode(expr: Expression): TreeNode = {
+  def getColumnarFuncNode(expr: Expression): (TreeNode, ArrowType) = {
     if (expr.isInstanceOf[AttributeReference] && expr
           .asInstanceOf[AttributeReference]
           .name == "none") {
@@ -322,9 +325,7 @@ object ConverterUtils extends Logging {
     var columnarExpr: Expression =
       ColumnarExpressionConverter.replaceWithColumnarExpression(expr)
     var inputList: java.util.List[Field] = Lists.newArrayList()
-    val (node, _resultType) =
-      columnarExpr.asInstanceOf[ColumnarExpression].doColumnarCodeGen(inputList)
-    node
+    columnarExpr.asInstanceOf[ColumnarExpression].doColumnarCodeGen(inputList)
   }
 
   def ifEquals(left: Seq[AttributeReference], right: Seq[NamedExpression]): Boolean = {
