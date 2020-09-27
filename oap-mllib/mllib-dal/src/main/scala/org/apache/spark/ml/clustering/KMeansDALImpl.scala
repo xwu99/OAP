@@ -22,7 +22,7 @@ import com.intel.daal.services.DaalContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.ml.util._
-import org.apache.spark.mllib.clustering.{DistanceMeasure, KMeansModel => MLlibKMeansModel}
+import org.apache.spark.mllib.clustering.{KMeansModel => MLlibKMeansModel}
 import org.apache.spark.mllib.linalg.{Vector => OldVector, Vectors => OldVectors}
 import org.apache.spark.rdd.{ExecutorInProcessCoalescePartitioner, RDD}
 
@@ -78,8 +78,8 @@ class KMeansDALImpl (
       var dalRow = 0
          
       it.foreach { curVector =>
-        val rowarr = curVector.toArray
-        OneDAL.cSetDoubleBatch(matrix.getCNumericTable, dalRow, rowarr, 1, numCols)
+        val rowArr = curVector.toArray
+        OneDAL.cSetDoubleBatch(matrix.getCNumericTable, dalRow, rowArr, 1, numCols)
         dalRow += 1
       }
 
@@ -87,7 +87,7 @@ class KMeansDALImpl (
 
     }.cache()
     
-	// workaroud to fix the bug of multi executors handling same partition.
+	  // workaround to fix the bug of multi executors handling same partition.
     numericTables.foreachPartition(() => _)
     numericTables.count()
 
@@ -114,7 +114,7 @@ class KMeansDALImpl (
       OneCCL.init(executorNum, executorIPAddress, OneCCL.KVS_PORT)
 
       val initCentroids = OneDAL.makeNumericTable(centers)
-      var result = new KMeansResult()
+      val result = new KMeansResult()
       val cCentroids = cKMeansDALComputeWithInitCenters(
         tableArr,
         initCentroids.getCNumericTable,
