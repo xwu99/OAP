@@ -921,7 +921,7 @@ object ALS extends DefaultParamsReadable[ALS] with Logging {
 
     val (userIdAndFactors, itemIdAndFactors) =
       if (implicitPrefs) {
-        trainDAL(ratings, rank, maxIter, regParam, alpha)
+        new ALSDALImpl(ratings, rank, maxIter, regParam, alpha, seed).run()
       } else {
         trainMLlib(ratings, rank, numUserBlocks, numItemBlocks, maxIter, regParam, implicitPrefs,
           alpha, nonnegative, intermediateRDDStorageLevel, finalRDDStorageLevel,
