@@ -10,10 +10,10 @@ extern "C" {
 /*
  * Class:     org_apache_spark_ml_recommendation_ALSDALImpl
  * Method:    cDALImplictALS
- * Signature: (JIIDDIILorg/apache/spark/ml/recommendation/ALSResult;)J
+ * Signature: (JJIIDDIILorg/apache/spark/ml/recommendation/ALSResult;)J
  */
 JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_recommendation_ALSDALImpl_cDALImplictALS
-  (JNIEnv *, jobject, jlong, jint, jint, jdouble, jdouble, jint, jint, jobject);
+  (JNIEnv *, jobject, jlong, jlong, jint, jint, jdouble, jdouble, jint, jint, jobject);
 
 #ifdef __cplusplus
 }

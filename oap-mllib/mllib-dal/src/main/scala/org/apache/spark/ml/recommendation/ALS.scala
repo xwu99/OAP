@@ -927,7 +927,8 @@ object ALS extends DefaultParamsReadable[ALS] with Logging {
           alpha, nonnegative, intermediateRDDStorageLevel, finalRDDStorageLevel,
           checkpointInterval, seed)
       }
-    (userIdAndFactors, itemIdAndFactors)
+//    (userIdAndFactors, itemIdAndFactors)
+    null
   }
 
   private def trainDAL[ID: ClassTag](

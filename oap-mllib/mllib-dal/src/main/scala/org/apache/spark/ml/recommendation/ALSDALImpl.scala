@@ -4,52 +4,97 @@ import org.apache.spark.rdd.RDD
 
 import scala.reflect.ClassTag
 import com.intel.daal.data_management.data.{CSRNumericTable, HomogenNumericTable, Matrix => DALMatrix}
+import com.intel.daal.services.DaalContext
+import org.apache.spark.internal.Logging
 import org.apache.spark.ml.recommendation.ALS.Rating
+import org.apache.spark.ml.util.{Service, Utils}
 
-class ALSDALImpl[ID: ClassTag](
-  ratings: RDD[Rating[ID]],
+class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
+  data: RDD[Rating[ID]],
   rank: Int,
   maxIter: Int,
   regParam: Double,
   alpha: Double,
-  seed: Long
-) extends Serializable {
+  seed: Long,
+) extends Serializable with Logging {
 
-  private def ratingsToCSRNumericTables(ratings: RDD[Rating[ID]]): RDD[CSRNumericTable] = {
-    null
+  private def ratingsToCSRNumericTables(ratings: RDD[Rating[ID]],
+    nRatings: Long, nVectors: Long, nFeatures: Long): RDD[CSRNumericTable] = {
+
+    val rowSortedRatings = ratings.sortBy(_.user.toString.toLong)
+
+    println("ratingsToCSRNumericTables", nRatings, nVectors, nFeatures)
+
+    rowSortedRatings.mapPartitions { partition =>
+      val values = Array.fill(nRatings.toInt) { 0.0f }
+      val columnIndices = Array.fill(nRatings.toInt) { 0L }
+      val rowOffsets = Array.fill(nVectors.toInt+1) { 0L }
+
+      var index = 0
+      var curRow = 0
+      // Each partition converted to one CSRNumericTable
+      partition.foreach { p =>
+        val row = p.user.toString.toLong
+        val column = p.item.toString.toLong
+        val rating = p.rating
+
+        values(index) = rating
+        columnIndices(index) = column
+
+        if (row > rowOffsets(curRow)) {
+          curRow = curRow + 1
+          rowOffsets(curRow) = index
+        }
+
+        index = index + 1
+      }
+      curRow = curRow + 1
+      rowOffsets(curRow) = index
+
+      println("rowOffsets", rowOffsets.mkString(","))
+      println("columnIndices", columnIndices.mkString(","))
+      println("values", values.mkString(","))
+
+      val contextLocal = new DaalContext()
+      val table = new CSRNumericTable(contextLocal, values, columnIndices, rowOffsets, nFeatures, nVectors)
+
+//      Service.printNumericTable("Input", table)
+
+      Iterator(table)
+    }
   }
 
-//  private def initialize[ID](
-//                              inBlocks: RDD[(Int, InBlock[ID])],
-//                              rank: Int,
-//                              seed: Long): RDD[(Int, FactorBlock)] = {
-//    // Choose a unit vector uniformly at random from the unit sphere, but from the
-//    // "first quadrant" where all elements are nonnegative. This can be done by choosing
-//    // elements distributed as Normal(0,1) and taking the absolute value, and then normalizing.
-//    // This appears to create factorizations that have a slightly better reconstruction
-//    // (<1%) compared picking elements uniformly at random in [0,1].
-//    inBlocks.mapPartitions({ iter =>
-//      iter.map {
-//        case (srcBlockId, inBlock) =>
-//          val random = new XORShiftRandom(byteswap64(seed ^ srcBlockId))
-//          val factors = Array.fill(inBlock.srcIds.length) {
-//            val factor = Array.fill(rank)(random.nextGaussian().toFloat)
-//            val nrm = blas.snrm2(rank, factor, 1)
-//            blas.sscal(rank, 1.0f / nrm, factor, 1)
-//            factor
-//          }
-//          (srcBlockId, factors)
-//      }
-//    }, preservesPartitioning = true)
-//  }
-
   def run(): (RDD[(ID, Array[Float])], RDD[(ID, Array[Float])]) = {
-    val numericTables = ratingsToCSRNumericTables(ratings)
+    val executorNum = Utils.sparkExecutorNum()
+    val executorCores = Utils.sparkExecutorCores()
+
+    val largestItems = data.sortBy(_.item.toString.toLong, ascending = false).take(1)
+    val nFeatures = largestItems(0).item.toString.toLong + 1
+
+    val largestUsers = data.sortBy(_.user.toString.toLong, ascending = false).take(1)
+    val nVectors = largestUsers(0).user.toString.toLong + 1
+
+    val nRatings = data.count()
+
+    logInfo(s"ALSDAL fit $nRatings ratings using $executorNum Executors for $nVectors vectors and $nFeatures features")
+
+    val executorIPAddress = Utils.sparkFirstExecutorIP(data.sparkContext)
+    val dataForConversion = if (data.getNumPartitions < executorNum) {
+      data.repartition(executorNum).setName("Repartitioned for conversion").cache()
+    } else {
+      data
+    }
+
+    val numericTables = ratingsToCSRNumericTables(dataForConversion, nRatings, nVectors, nFeatures)
+    numericTables.count()
+
     null
   }
 
   // Single entry to call Implict ALS DAL backend
-  @native private def cDALImplictALS(data: Long, rank: Int,
+  @native private def cDALImplictALS(data: Long, 
+                                     nUsers: Long,
+                                     rank: Int,
                                      maxIter: Int,
                                      regParam: Double,
                                      alpha: Double,
