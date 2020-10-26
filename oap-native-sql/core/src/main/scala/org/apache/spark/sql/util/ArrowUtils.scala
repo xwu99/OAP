@@ -26,12 +26,14 @@ import org.apache.arrow.vector.types.pojo.{ArrowType, Field, FieldType, Schema}
 
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
+import org.apache.spark.sql.catalyst.expressions.Attribute
 
 object ArrowUtils {
 
+  @Deprecated
   val rootAllocator = new RootAllocator(Long.MaxValue)
-  // todo: support more types.
 
+  // todo: support more types.
   /** Maps data type from Spark to Arrow. NOTE: timeZoneId required for TimestampTypes */
   def toArrowType(dt: DataType, timeZoneId: String): ArrowType = dt match {
     case BooleanType => ArrowType.Bool.INSTANCE
@@ -148,4 +150,7 @@ object ArrowUtils {
       conf.arrowSafeTypeConversion.toString)
     Map(timeZoneConf ++ pandasColsByName ++ arrowSafeTypeCheck: _*)
   }
+  
+  def fromAttributes(attributes: Seq[Attribute]): StructType = 
+    StructType.fromAttributes(attributes)
 }

@@ -30,6 +30,7 @@ import org.apache.spark.internal.config.ConfigEntry
 import org.apache.spark.memory.MemoryMode
 import org.apache.spark.sql.execution.datasources.OapException
 import org.apache.spark.sql.execution.datasources.oap.filecache.FiberType.FiberType
+import org.apache.spark.sql.execution.datasources.oap.filecache.OapCache.plasmaServerDetect
 import org.apache.spark.sql.execution.datasources.oap.utils.PersistentMemoryConfigUtils
 import org.apache.spark.sql.internal.oap.OapConf
 import org.apache.spark.storage.{BlockManager, TestBlockId}
@@ -143,13 +144,22 @@ private[sql] object MemoryManager extends Logging {
         configEntry.key,
         configEntry.defaultValue.get).toLowerCase
     val memoryManagerOpt =
-      conf.get(OapConf.OAP_FIBERCACHE_MEMORY_MANAGER.key, "offheap").toLowerCase
+      if (sparkEnv.conf.getOption(OapConf.OAP_FIBERCACHE_MEMORY_MANAGER.key).isDefined) {
+        sparkEnv.conf.get(OapConf.OAP_FIBERCACHE_MEMORY_MANAGER.key, "offheap").toLowerCase
+      } else {
+        sparkEnv.conf.get(OapConf.OAP_FIBERCACHE_MEMORY_MANAGER_BK.key, "offheap").toLowerCase
+      }
     checkConfCompatibility(cacheStrategyOpt, memoryManagerOpt)
     cacheStrategyOpt match {
       case "guava" => apply(sparkEnv, memoryManagerOpt)
       case "noevict" => new HybridMemoryManager(sparkEnv)
       case "vmem" => new TmpDramMemoryManager(sparkEnv)
-      case "external" => new TmpDramMemoryManager(sparkEnv)
+      case "external" =>
+        if (plasmaServerDetect()) {
+          new TmpDramMemoryManager(sparkEnv)
+        } else {
+          new OffHeapMemoryManager(sparkEnv)
+        }
       case "mix" =>
         if (!memoryManagerOpt.equals("mix")) {
           apply(sparkEnv, memoryManagerOpt)
@@ -190,7 +200,12 @@ private[filecache] class OffHeapMemoryManager(sparkEnv: SparkEnv)
   private lazy val memoryManager = sparkEnv.memoryManager
 
   private lazy val oapMemory = {
-    val offHeapSizeStr = sparkEnv.conf.get(OapConf.OAP_FIBERCACHE_OFFHEAP_MEMORY_SIZE).trim
+    val offHeapSizeStr =
+      if (sparkEnv.conf.getOption(OapConf.OAP_FIBERCACHE_OFFHEAP_MEMORY_SIZE.key).isDefined) {
+        sparkEnv.conf.get(OapConf.OAP_FIBERCACHE_OFFHEAP_MEMORY_SIZE).trim
+      } else {
+        sparkEnv.conf.get(OapConf.OAP_FIBERCACHE_OFFHEAP_MEMORY_SIZE_BK).trim
+      }
     val offHeapSize = Utils.byteStringAsBytes(offHeapSizeStr)
     offHeapSize.toLong
   }
@@ -234,9 +249,12 @@ private[filecache] class OffHeapMemoryManager(sparkEnv: SparkEnv)
  */
 private[filecache] class TmpDramMemoryManager(sparkEnv: SparkEnv)
   extends MemoryManager with Logging {
-
   val cacheGuardianMemorySizeStr =
-    sparkEnv.conf.get(OapConf.OAP_CACHE_GUARDIAN_MEMORY_SIZE)
+    if (sparkEnv.conf.getOption(OapConf.OAP_CACHE_GUARDIAN_MEMORY_SIZE.key).isDefined) {
+      sparkEnv.conf.get(OapConf.OAP_CACHE_GUARDIAN_MEMORY_SIZE)
+    } else {
+      sparkEnv.conf.get(OapConf.OAP_CACHE_GUARDIAN_MEMORY_SIZE_BK)
+    }
   val cacheGuardianMemory = Utils.byteStringAsBytes(cacheGuardianMemorySizeStr)
   logInfo(s"cacheGuardian total use $cacheGuardianMemory bytes memory")
   val cacheGuardianRetrySleepTimeInMs = 10
@@ -255,7 +273,7 @@ private[filecache] class TmpDramMemoryManager(sparkEnv: SparkEnv)
       if (retryTime > cacheGuardianRetryTime) {
         throw new OapException("cache guardian use too much memory over " +
           cacheGuardianRetryTime * cacheGuardianRetrySleepTimeInMs + "ms, please consider " +
-          "increase memory size by 'spark.sql.oap.cache.guardian.memory.size' configuration or " +
+          "increase memory size by 'spark.executor.sql.oap.cache.guardian.memory.size' configuration or " +
           "increase retry time by 'spark.sql.oap.cache.guardian.retry.time.in.ms' configuration")
       }
     }
@@ -317,13 +335,26 @@ private[filecache] class PersistentMemoryManager(sparkEnv: SparkEnv)
     }
 
     val initialPath = map.get(numaId).get
-    val initialSizeStr = conf.get(OapConf.OAP_FIBERCACHE_PERSISTENT_MEMORY_INITIAL_SIZE).trim
+    val initialSizeStr =
+      if (conf.getOption(OapConf.OAP_FIBERCACHE_PERSISTENT_MEMORY_INITIAL_SIZE.key).isDefined) {
+        conf.get(OapConf.OAP_FIBERCACHE_PERSISTENT_MEMORY_INITIAL_SIZE).trim
+      } else {
+        conf.get(OapConf.OAP_FIBERCACHE_PERSISTENT_MEMORY_INITIAL_SIZE_BK).trim
+      }
     val initialSize = Utils.byteStringAsBytes(initialSizeStr)
-    val reservedSizeStr = conf.get(OapConf.OAP_FIBERCACHE_PERSISTENT_MEMORY_RESERVED_SIZE).trim
+    val reservedSizeStr =
+      if (conf.getOption(OapConf.OAP_FIBERCACHE_PERSISTENT_MEMORY_RESERVED_SIZE.key).isDefined) {
+      conf.get(OapConf.OAP_FIBERCACHE_PERSISTENT_MEMORY_RESERVED_SIZE).trim
+      } else {
+      conf.get(OapConf.OAP_FIBERCACHE_PERSISTENT_MEMORY_RESERVED_SIZE_BK).trim
+      }
+
     val reservedSize = Utils.byteStringAsBytes(reservedSizeStr)
 
     val enableConservative = conf.getBoolean(OapConf.OAP_ENABLE_MEMKIND_CONSERVATIVE.key,
-      OapConf.OAP_ENABLE_MEMKIND_CONSERVATIVE.defaultValue.get)
+      OapConf.OAP_ENABLE_MEMKIND_CONSERVATIVE.defaultValue.get) &&
+      conf.getBoolean(OapConf.OAP_ENABLE_MEMKIND_CONSERVATIVE_BK.key,
+        OapConf.OAP_ENABLE_MEMKIND_CONSERVATIVE_BK.defaultValue.get)
     val memkindPattern = if (enableConservative) 1 else 0
 
     logInfo(s"Current Memkind pattern: ${memkindPattern}")
@@ -385,12 +416,25 @@ private[filecache] class DaxKmemMemoryManager(sparkEnv: SparkEnv)
     val regularNodeNum = map.size
     val daxNodeId = numaId + regularNodeNum
 
+
+    val kmemCacheMemoryStr =
+      if (conf.getOption(OapConf.OAP_FIBERCACHE_PERSISTENT_MEMORY_INITIAL_SIZE.key).isDefined) {
+        conf.get(OapConf.OAP_FIBERCACHE_PERSISTENT_MEMORY_INITIAL_SIZE).trim
+        } else {
+        conf.get(OapConf.OAP_FIBERCACHE_PERSISTENT_MEMORY_INITIAL_SIZE_BK).trim
+        }
+    val kmemCacheMemoryReserverdStr =
+      if (conf.getOption(OapConf.OAP_FIBERCACHE_PERSISTENT_MEMORY_RESERVED_SIZE.key).isDefined) {
+        conf.get(OapConf.OAP_FIBERCACHE_PERSISTENT_MEMORY_RESERVED_SIZE).trim
+        } else {
+        conf.get(OapConf.OAP_FIBERCACHE_PERSISTENT_MEMORY_RESERVED_SIZE_BK).trim
+        }
+
     val (kmemCacheMemory, kmemCacheMemoryReserverd) = {
-      (Utils.byteStringAsBytes(
-        conf.get(OapConf.OAP_FIBERCACHE_PERSISTENT_MEMORY_INITIAL_SIZE).trim),
-        Utils.byteStringAsBytes(
-          conf.get(OapConf.OAP_FIBERCACHE_PERSISTENT_MEMORY_RESERVED_SIZE).trim))
+      (Utils.byteStringAsBytes(kmemCacheMemoryStr),
+        Utils.byteStringAsBytes(kmemCacheMemoryReserverdStr))
     }
+
     require(kmemCacheMemoryReserverd >= 0 && kmemCacheMemoryReserverd < kmemCacheMemory,
       s"Reserved size(${kmemCacheMemoryReserverd}) should greater than zero and less than " +
         s"initial size(${kmemCacheMemory})"
@@ -442,13 +486,25 @@ private[filecache] class HybridMemoryManager(sparkEnv: SparkEnv)
     }
 
     val initialPath = map.get(numaId).get
-    val initialSizeStr = conf.get(OapConf.OAP_FIBERCACHE_PERSISTENT_MEMORY_INITIAL_SIZE).trim
+    val initialSizeStr =
+      if (conf.getOption(OapConf.OAP_FIBERCACHE_PERSISTENT_MEMORY_INITIAL_SIZE.key).isDefined) {
+        conf.get(OapConf.OAP_FIBERCACHE_PERSISTENT_MEMORY_INITIAL_SIZE).trim
+      } else {
+        conf.get(OapConf.OAP_FIBERCACHE_PERSISTENT_MEMORY_INITIAL_SIZE_BK).trim
+      }
     val initialPMSize = Utils.byteStringAsBytes(initialSizeStr)
-    val reservedSizeStr = conf.get(OapConf.OAP_FIBERCACHE_PERSISTENT_MEMORY_RESERVED_SIZE).trim
+    val reservedSizeStr =
+      if (conf.getOption(OapConf.OAP_FIBERCACHE_PERSISTENT_MEMORY_RESERVED_SIZE.key).isDefined) {
+        conf.get(OapConf.OAP_FIBERCACHE_PERSISTENT_MEMORY_RESERVED_SIZE).trim
+      } else {
+        conf.get(OapConf.OAP_FIBERCACHE_PERSISTENT_MEMORY_RESERVED_SIZE_BK).trim
+      }
     val reservedPMSize = Utils.byteStringAsBytes(reservedSizeStr)
     val fullPath = Utils.createTempDir(initialPath + File.separator + executorId)
     val enableConservative = conf.getBoolean(OapConf.OAP_ENABLE_MEMKIND_CONSERVATIVE.key,
-      OapConf.OAP_ENABLE_MEMKIND_CONSERVATIVE.defaultValue.get)
+      OapConf.OAP_ENABLE_MEMKIND_CONSERVATIVE.defaultValue.get) &&
+      conf.getBoolean(OapConf.OAP_ENABLE_MEMKIND_CONSERVATIVE_BK.key,
+        OapConf.OAP_ENABLE_MEMKIND_CONSERVATIVE_BK.defaultValue.get)
     val memkindPattern = if (enableConservative) 1 else 0
     PersistentMemoryPlatform.initialize(fullPath.getCanonicalPath, initialPMSize, memkindPattern)
     logInfo(s"Initialize Intel Optane DC persistent memory successfully, numaId: " +
@@ -458,8 +514,7 @@ private[filecache] class HybridMemoryManager(sparkEnv: SparkEnv)
       s"Reserved size(${reservedPMSize}) should be larger than zero and smaller than initial " +
         s"size(${initialPMSize})")
     val totalPMUsableSize = initialPMSize - reservedPMSize
-    val initialDRAMSizeSize = Utils.byteStringAsBytes(
-      conf.get(OapConf.OAP_FIBERCACHE_PERSISTENT_MEMORY_INITIAL_SIZE).trim)
+    val initialDRAMSizeSize = initialPMSize
     ((totalPMUsableSize * 0.9).toLong,
       (totalPMUsableSize * 0.9).toLong,
       (initialDRAMSizeSize * 0.9).toLong,

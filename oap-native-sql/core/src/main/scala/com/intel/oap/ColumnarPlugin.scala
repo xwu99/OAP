@@ -17,41 +17,29 @@
 
 package com.intel.oap
 
-import java.util.Locale
-
-import java.io.{File, BufferedReader, InputStreamReader};
-import java.nio.file.Files;
 import com.intel.oap.execution._
-
 import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.{SparkSession, SparkSessionExtensions}
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.execution.adaptive.{
-  BroadcastQueryStageExec,
-  ColumnarCustomShuffleReaderExec,
-  CustomShuffleReaderExec,
-  ShuffleQueryStageExec
-}
+import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution._
+import org.apache.spark.sql.execution.adaptive.{BroadcastQueryStageExec, ColumnarCustomShuffleReaderExec, CustomShuffleReaderExec, ShuffleQueryStageExec}
 import org.apache.spark.sql.execution.aggregate.HashAggregateExec
 import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
-import org.apache.spark.sql.execution.exchange.{
-  BroadcastExchangeExec,
-  ReusedExchangeExec,
-  ShuffleExchangeExec
-}
-import org.apache.spark.sql.execution.joins._
-import org.apache.spark.sql.execution.joins.{BuildLeft, BuildRight, BuildSide}
-import org.apache.spark.sql.execution.joins.SortMergeJoinExec
+import org.apache.spark.sql.execution.exchange.{BroadcastExchangeExec, ReusedExchangeExec, ShuffleExchangeExec}
+import org.apache.spark.sql.execution.joins.{BroadcastHashJoinExec, BuildLeft, BuildRight, ShuffledHashJoinExec, SortMergeJoinExec, _}
+import org.apache.spark.sql.types.StringType
+import org.apache.spark.sql.execution.window.WindowExec
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.{SparkSession, SparkSessionExtensions}
-import java.io.IOException
 
 case class ColumnarPreOverrides(conf: SparkConf) extends Rule[SparkPlan] {
   val columnarConf = ColumnarPluginConfig.getConf(conf)
 
-  def replaceWithColumnarPlan(plan: SparkPlan, nc: Seq[SparkPlan] = null): SparkPlan = plan match {
+  def replaceWithColumnarPlan(
+      plan: SparkPlan,
+      nc: Seq[SparkPlan] = null,
+      parent: SparkPlan = null): SparkPlan = plan match {
     case plan: BatchScanExec =>
       logDebug(s"Columnar Processing for ${plan.getClass} is currently supported.")
       new ColumnarBatchScanExec(plan.output, plan.scan)
@@ -64,16 +52,16 @@ case class ColumnarPreOverrides(conf: SparkConf) extends Rule[SparkPlan] {
       }
       //new ColumnarProjectExec(plan.projectList, replaceWithColumnarPlan(plan.child))
       val columnarPlan =
-        if (nc == null) replaceWithColumnarPlan(plan.child) else nc(0)
+        if (nc == null) replaceWithColumnarPlan(plan.child, parent = plan) else nc(0)
       logDebug(s"Columnar Processing for ${plan.getClass} is currently supported.")
       var newPlan: SparkPlan = null
       try {
         // If some expression is not supported, we will use RowBased HashAggr here.
-        val newColumnarPlan = if (!columnarPlan.isInstanceOf[ColumnarConditionProjectExec]) {
-          new ColumnarConditionProjectExec(null, plan.projectList, columnarPlan)
-        } else {
+        val newColumnarPlan = if (columnarPlan.isInstanceOf[ColumnarConditionProjectExec]) {
           val cur_plan = columnarPlan.asInstanceOf[ColumnarConditionProjectExec]
           new ColumnarConditionProjectExec(cur_plan.condition, plan.projectList, cur_plan.child)
+        } else {
+          new ColumnarConditionProjectExec(null, plan.projectList, columnarPlan)
         }
         newPlan = newColumnarPlan
       } catch {
@@ -126,7 +114,9 @@ case class ColumnarPreOverrides(conf: SparkConf) extends Rule[SparkPlan] {
       logDebug(s"Columnar Processing for ${plan.getClass} is currently supported.")
       new ColumnarExpandExec(plan.projections, plan.output, children(0))
     case plan: SortExec =>
-      if (columnarConf.enableColumnarSort) {
+      val sortList = {plan.sortOrder.filter(expr => expr.dataType == StringType)}
+      //TODO(Rui): fix sorting on string
+      if (columnarConf.enableColumnarSort && sortList.isEmpty) {
         val child =
           if (nc == null) replaceWithColumnarPlan(plan.child) else nc(0)
         logDebug(s"Columnar Processing for ${plan.getClass} is currently supported.")
@@ -176,7 +166,7 @@ case class ColumnarPreOverrides(conf: SparkConf) extends Rule[SparkPlan] {
       // If some expression is not supported, we will use RowBased HashAggr here.
       var newPlan: SparkPlan = plan.withNewChildren(List(left, right))
       try {
-        val columnarPlan = new ColumnarShuffledHashJoinExec(
+        val columnarPlan = ColumnarShuffledHashJoinExec(
           plan.leftKeys,
           plan.rightKeys,
           plan.joinType,
@@ -230,7 +220,7 @@ case class ColumnarPreOverrides(conf: SparkConf) extends Rule[SparkPlan] {
         }
         logDebug(s"Columnar Processing for ${plan.getClass} is currently supported.")
         try {
-          val columnarPlan = new ColumnarBroadcastHashJoinExec(
+          val columnarPlan = ColumnarBroadcastHashJoinExec(
             plan.leftKeys,
             plan.rightKeys,
             plan.joinType,
@@ -258,7 +248,7 @@ case class ColumnarPreOverrides(conf: SparkConf) extends Rule[SparkPlan] {
           return child
         }
       }
-      if (columnarConf.enableColumnarSortMergeJoin && plan.condition == None) {
+      if (columnarConf.enableColumnarSortMergeJoin ) {
         val left = replaceWithColumnarPlan(plan.left)
         val right = replaceWithColumnarPlan(plan.right)
         logDebug(s"Columnar Processing for ${plan.getClass} is currently supported.")
@@ -314,6 +304,26 @@ case class ColumnarPreOverrides(conf: SparkConf) extends Rule[SparkPlan] {
         case _ =>
           plan
       }
+
+    case plan: WindowExec =>
+      if (columnarConf.enableColumnarWindow) {
+        val child = plan.child match {
+          case sort: SortExec => // remove ordering requirements
+            replaceWithColumnarPlan(sort.child)
+          case _ =>
+            replaceWithColumnarPlan(plan.child)
+        }
+        logDebug(s"Columnar Processing for ${plan.getClass} is currently supported.")
+        try {
+          return new ColumnarWindowExec(plan.windowExpression, plan.partitionSpec, plan.orderSpec, child)
+        } catch {
+          case _: Throwable =>
+            logInfo("Columnar Window: Falling back to regular Window...")
+        }
+      }
+      logDebug(s"Columnar Processing for ${plan.getClass} is not currently supported.")
+      val children = plan.children.map(replaceWithColumnarPlan(_))
+      plan.withNewChildren(children)
 
     case p =>
       val children = applyChildrenWithStrategy(p)
@@ -504,7 +514,7 @@ case class ColumnarPreOverrides(conf: SparkConf) extends Rule[SparkPlan] {
           case plan: UnionExec =>
             val children = applyChildrenWithStrategy(plan)
             var pure_row = true
-            children.foreach{c => if(c.supportsColumnar) pure_row = false}
+            children.foreach { c => if (c.supportsColumnar) pure_row = false }
             if (!pure_row) {
               replaceWithColumnarPlan(child, children)
             } else {
@@ -513,7 +523,7 @@ case class ColumnarPreOverrides(conf: SparkConf) extends Rule[SparkPlan] {
           case plan: ExpandExec =>
             val children = applyChildrenWithStrategy(plan)
             var pure_row = true
-            children.foreach{c => if(c.supportsColumnar) pure_row = false}
+            children.foreach { c => if (c.supportsColumnar) pure_row = false }
             if (!pure_row) {
               replaceWithColumnarPlan(child, children)
             } else {
@@ -553,6 +563,8 @@ case class ColumnarPostOverrides(conf: SparkConf) extends Rule[SparkPlan] {
       // When AQE enabled, we need to discard ColumnarToRowExec to avoid extra transactions
       // if ColumnarShuffleExchangeExec is the last plan of the query stage.
       replaceWithColumnarPlan(child)
+    case ColumnarToRowExec(child: CoalesceBatchesExec) =>
+      plan.withNewChildren(Seq(replaceWithColumnarPlan(child.child)))
     case p =>
       val children = p.children.map(replaceWithColumnarPlan)
       p.withNewChildren(children)

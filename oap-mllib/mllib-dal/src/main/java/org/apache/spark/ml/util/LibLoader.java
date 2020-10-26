@@ -77,10 +77,10 @@ public final class LibLoader {
      * @param path sub folder (in temporary folder) name
      * @param name library name
      */
-    private static void loadFromJar(String path, String name) throws IOException {
-        logger.log(logLevel, "Loading " + name + " ...");
+    private static void loadFromJar(String path, String fullName) throws IOException {
+        logger.log(logLevel, "Loading " + fullName + " ...");
 
-        File fileOut = createTempFile(path, name);
+        File fileOut = createTempFile(path, fullName);
         // File exists already
         if (fileOut == null) {
             logger.log(logLevel, "DONE: Loading library as resource.");

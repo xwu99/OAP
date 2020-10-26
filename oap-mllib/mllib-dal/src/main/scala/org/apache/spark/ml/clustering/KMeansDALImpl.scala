@@ -72,9 +72,11 @@ class KMeansDALImpl (
         numCols.toLong, numRows.toLong, NumericTable.AllocationFlag.DoAllocate)
 
       println("KMeansDALImpl: Loading native libraries" )
-      // oneDAL libs should be loaded by now, loading all native libraries
+      // oneDAL libs should be loaded by now, extract libMLlibDAL.so to temp file and load
       LibLoader.loadLibraries()
 
+      import scala.collection.JavaConverters._
+      
       var dalRow = 0
          
       it.foreach { curVector =>

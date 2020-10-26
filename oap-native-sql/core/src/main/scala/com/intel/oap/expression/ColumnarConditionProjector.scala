@@ -122,7 +122,7 @@ class ColumnarConditionProjector(
   elapseTime_make = System.nanoTime() - start_make
   logInfo(s"Gandiva make total ${TimeUnit.NANOSECONDS.toMillis(elapseTime_make)} ms.")
 
-  val allocator = ArrowWritableColumnVector.getNewAllocator
+  val allocator = ArrowWritableColumnVector.getAllocator
 
   def createFilter(arrowSchema: Schema, prepareList: (TreeNode, ArrowType)): Filter =
     synchronized {
@@ -164,7 +164,6 @@ class ColumnarConditionProjector(
       selectionBuffer.close()
       selectionBuffer = null
     }
-    allocator.close()
     if (conditioner != null) {
       conditioner.close()
     }
@@ -366,16 +365,69 @@ object ColumnarConditionProjector extends Logging {
       skip_filter && skip_project)
   }
 
+  def prepareKernelFunction(
+      condExpr: Expression,
+      projectList: Seq[NamedExpression],
+      originalInputAttributes: Seq[Attribute]): (TreeNode, TreeNode) = {
+    val conditionInputList: java.util.List[Field] = Lists.newArrayList()
+    var projectInputList: java.util.List[Field] = Lists.newArrayList()
+    val inputNodeList: List[TreeNode] = originalInputAttributes.toList.map(attr => {
+      val field = Field
+        .nullable(s"${attr.name}#${attr.exprId.id}", CodeGeneration.getResultType(attr.dataType))
+      TreeBuilder.makeField(field)
+    })
+    val input_node = TreeBuilder.makeFunction(
+      "codegen_input_schema",
+      inputNodeList.asJava,
+      new ArrowType.Int(32, true) /*dummy ret type, won't be used*/ )
+
+    val conditionNode = if (condExpr != null) {
+      val columnarCondExpr: Expression = ColumnarExpressionConverter
+        .replaceWithColumnarExpression(condExpr)
+      val (thisNode, resultType) =
+        columnarCondExpr.asInstanceOf[ColumnarExpression].doColumnarCodeGen(conditionInputList)
+      TreeBuilder.makeFunction(
+        "filter",
+        Lists.newArrayList(input_node, thisNode),
+        new ArrowType.Int(32, true))
+    } else {
+      null
+    }
+
+    val projectionNode = if (projectList != null && projectList.size != 0) {
+      val columnarProjExprs: Seq[Expression] = projectList.map(expr => {
+        ColumnarExpressionConverter.replaceWithColumnarExpression(expr)
+      })
+
+      val thisNodeList = columnarProjExprs.toList.map(columnarExpr => {
+        columnarExpr.asInstanceOf[ColumnarExpression].doColumnarCodeGen(projectInputList)._1
+      })
+      val project_node = TreeBuilder.makeFunction(
+        "codegen_project",
+        thisNodeList.asJava,
+        new ArrowType.Int(32, true) /*dummy ret type, won't be used*/ )
+      TreeBuilder.makeFunction(
+        "project",
+        Lists.newArrayList(input_node, project_node),
+        new ArrowType.Int(32, true))
+    } else {
+      null
+    }
+
+    (conditionNode, projectionNode)
+
+  }
+
   def prebuild(
       condition: Expression,
-      projectList: Seq[Expression],
+      projectList: Seq[NamedExpression],
       inputSchema: Seq[Attribute]): Unit = {
     init(condition, projectList, inputSchema, false)
   }
 
   def create(
       condition: Expression,
-      projectList: Seq[Expression],
+      projectList: Seq[NamedExpression],
       inputSchema: Seq[Attribute],
       numInputBatches: SQLMetric,
       numOutputBatches: SQLMetric,

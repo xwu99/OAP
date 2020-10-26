@@ -70,7 +70,9 @@ private[oap] case class OrcDataFile(
   private lazy val filePath: Path = new Path(path)
   private lazy val orcDataCacheEnable =
     configuration.getBoolean(OapConf.OAP_ORC_DATA_CACHE_ENABLED.key,
-      OapConf.OAP_ORC_DATA_CACHE_ENABLED.defaultValue.get)
+      OapConf.OAP_ORC_DATA_CACHE_ENABLED.defaultValue.get) ||
+      configuration.getBoolean(OapConf.OAP_ORC_DATA_CACHE_ENABLE.key,
+        OapConf.OAP_ORC_DATA_CACHE_ENABLE.defaultValue.get)
   lazy val meta =
     OapRuntime.getOrCreate.dataFileMetaCacheManager.get(this).asInstanceOf[OrcDataFileMeta]
 //  meta.getOrcFileReader()
@@ -213,7 +215,7 @@ private[oap] case class OrcDataFile(
   override def getDataFileMeta(): DataFileMeta =
     new OrcDataFileMeta(filePath, configuration)
 
-  override def cache(groupId: Int, fiberId: Int): FiberCache = {
+  override def cache(groupId: Int, fiberId: Int, fiber: FiberId = null): FiberCache = {
     val fileSchema = fileReader.getSchema
     val columnTypeDesc = TypeDescription.createStruct()
       .addField(fileSchema.getFieldNames.get(fiberId), fileSchema.getChildren.get(fiberId))
@@ -238,6 +240,6 @@ private[oap] case class OrcDataFile(
     else {
       OrcCacheReader.putValues(rowCount, field, fromColumn, toColumn)
     }
-    ParquetDataFiberWriter.dumpToCache(toColumn, rowCount)
+    OrcDataFiberWriter.orcDumpToCache(toColumn, rowCount, fiber)
   }
 }
