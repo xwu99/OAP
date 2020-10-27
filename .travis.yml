@@ -125,7 +125,7 @@ jobs:
         - $HOME/downloads
       install:
       - # Install Spark 3.0
-      - "[ -f $HOME/downloads ] || mkdir $HOME/downloads"
+      - "[ -d $HOME/downloads ] || mkdir $HOME/downloads"
       - "cd $HOME/downloads && wget http://archive.apache.org/dist/spark/spark-3.0.0/spark-3.0.0-bin-hadoop2.7.tgz"
       - "cd $HOME && tar -xf $HOME/downloads/spark-3.0.0-bin-hadoop2.7.tgz"
       - "export SPARK_HOME=$HOME/spark-3.0.0-bin-hadoop2.7"
