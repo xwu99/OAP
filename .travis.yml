@@ -121,8 +121,8 @@ jobs:
       - openjdk8
       cache:
         directories:
-      - /opt/intel/inteloneapi
-      - $HOME/downloads
+        - /opt/intel/inteloneapi
+        - $HOME/downloads
       install:
       - # Install Spark 3.0
       - "[ -f $HOME/downloads ] || mkdir $HOME/downloads"
