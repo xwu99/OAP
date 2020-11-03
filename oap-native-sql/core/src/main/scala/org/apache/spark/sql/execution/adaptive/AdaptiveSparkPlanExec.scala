@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.execution.adaptive
 
-import com.intel.oap.execution.RowToArrowColumnarExec
+import com.intel.oap.execution.{RowToArrowColumnarExec, CoalesceBatchesExec}
 
 import java.util
 import java.util.concurrent.LinkedBlockingQueue
@@ -104,6 +104,7 @@ case class AdaptiveSparkPlanExec(
 
   @transient private val additionalRules: Seq[Rule[SparkPlan]] = Seq(
     ApplyColumnarRulesAndInsertTransitions(conf, context.session.sessionState.columnarRules),
+    ColumnarCollapseCodegenStages(context.session.sparkContext.getConf),
     CollapseCodegenStages(conf))
 
   @transient private val costEvaluator = SimpleCostEvaluator
@@ -403,9 +404,11 @@ case class AdaptiveSparkPlanExec(
         if (columnarBHJEnabled && parent.isInstanceOf[BroadcastHashJoinExec]) {
           val columnarExchangeChild = b.child match {
             case WholeStageCodegenExec(child: ColumnarToRowExec) =>
+              //CoalesceBatchesExec(child.child)
+              //TODO:() enable this when fixing hashagg hasNext
               child.child
             case child: ColumnarToRowExec =>
-              child.child
+              CoalesceBatchesExec(child.child)
             case child => {
               if (child.supportsColumnar) {
                 b.child

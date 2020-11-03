@@ -6,7 +6,7 @@ This directory contains some recipes to build OAP Conda package.
 You need to install Conda on the build system.
 ```$xslt
 wget -c https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh
-chmod 777 Miniconda3-latest-Linux-x86_64.sh 
+chmod 777 Miniconda2-latest-Linux-x86_64.sh 
 bash Miniconda2-latest-Linux-x86_64.sh 
 ```
 Then you should create a conda environment to build OAP Conda package.
@@ -26,6 +26,7 @@ anaconda login
 
 ### Build OAP Conda package
 ```$xslt
-cd $OAP_HOME/dev/create-release/conda-recipes/
-sh make-conda-release.sh
+sh $OAP_HOME/dev/make-conda-distribution.sh
+cd $OAP_HOME/dev/conda-release/conda-recipes/oap
+conda build .
 ```

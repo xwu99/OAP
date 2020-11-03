@@ -20,15 +20,12 @@ package com.intel.oap.execution
 import com.intel.oap.vectorized._
 import org.apache.spark._
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.connector.read.{
-  InputPartition,
-  PartitionReaderFactory,
-  PartitionReader
-}
+import org.apache.spark.sql.connector.read.{InputPartition, PartitionReader, PartitionReaderFactory}
 import org.apache.spark.sql.execution.datasources.{FilePartition, PartitionedFile}
 import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 import org.apache.spark.sql.execution.datasources.v2.VectorizedFilePartitionReaderHandler
+import org.apache.spark.sql.execution.datasources.v2.arrow.SparkMemoryUtils
 import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetPartitionReaderFactory
 
 class DataSourceRDDPartition(val index: Int, val inputPartition: InputPartition)
@@ -63,9 +60,7 @@ class ColumnarDataSourceRDD(
     val inputPartition = castPartition(split).inputPartition
     inputPartition match {
       case p: FilePartition =>
-        p.files.foreach {
-          f => inputSize += f.length
-        }
+        p.files.foreach { f => inputSize += f.length }
       case _ =>
     }
     val reader = if (columnarReads) {
@@ -79,7 +74,7 @@ class ColumnarDataSourceRDD(
     }
 
     val rddId = this
-    context.addTaskCompletionListener[Unit](_ => reader.close())
+    SparkMemoryUtils.addLeakSafeTaskCompletionListener[Unit](_ => reader.close())
     val iter = new Iterator[Any] {
       private[this] var valuePrepared = false
 
@@ -91,7 +86,7 @@ class ColumnarDataSourceRDD(
             numInputBatches += 1
             scanTime += (System.nanoTime() - beforeScan) / (1000 * 1000)
           } catch {
-            case e =>
+            case e: Throwable =>
               val errmsg = e.getStackTrace.mkString("\n")
               logError(s"hasNext got exception: $errmsg")
               valuePrepared = false

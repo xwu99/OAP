@@ -74,8 +74,24 @@ arrow::Status BuilderVisitor::Visit(const gandiva::FunctionNode& node) {
   auto func_name = desc->name();
   // if This functionNode is a "codegen",
   // we don't need to create expr_visitor for its children.
-  if (func_name.compare(0, 8, "codegen_") == 0) {
-    RETURN_NOT_OK(ExprVisitor::Make(node, ret_fields_, &expr_visitor_));
+  if (func_name.compare(0, 17, "wholestagecodegen") == 0) {
+    RETURN_NOT_OK(
+        ExprVisitor::Make(std::dynamic_pointer_cast<gandiva::FunctionNode>(func_),
+                          schema_, ret_fields_, &expr_visitor_));
+  } else if (func_name.compare("standalone") == 0) {
+    RETURN_NOT_OK(
+        ExprVisitor::Make(std::dynamic_pointer_cast<gandiva::FunctionNode>(func_),
+                          schema_, ret_fields_, &expr_visitor_));
+  } else if (func_name.compare("HashRelation") == 0) {
+    RETURN_NOT_OK(
+        ExprVisitor::Make(std::dynamic_pointer_cast<gandiva::FunctionNode>(func_),
+                          schema_, ret_fields_, &expr_visitor_));
+  } else if (func_name.compare(0, 8, "codegen_") == 0) {
+    RETURN_NOT_OK(
+        ExprVisitor::Make(std::dynamic_pointer_cast<gandiva::FunctionNode>(func_),
+                          schema_, ret_fields_, &expr_visitor_));
+  } else if (func_name == "window") {
+    RETURN_NOT_OK(ExprVisitor::MakeWindow(schema_, ret_fields_, node, &expr_visitor_));
   } else {
     for (auto child_node : node.children()) {
       auto child_visitor = std::make_shared<BuilderVisitor>(
@@ -172,12 +188,24 @@ arrow::Status ExprVisitor::Make(std::shared_ptr<arrow::Schema> schema_ptr,
   return arrow::Status::OK();
 }
 
-arrow::Status ExprVisitor::Make(const gandiva::FunctionNode& node,
+arrow::Status ExprVisitor::Make(const std::shared_ptr<gandiva::FunctionNode>& node,
+                                std::shared_ptr<arrow::Schema> schema_ptr,
                                 std::vector<std::shared_ptr<arrow::Field>> ret_fields,
                                 std::shared_ptr<ExprVisitor>* out) {
-  auto func_name = node.descriptor()->name();
-  if (func_name.compare("codegen_withOneInput") == 0) {
-    auto children = node.children();
+  auto func_name = node->descriptor()->name();
+  *out = std::make_shared<ExprVisitor>(func_name);
+  if (func_name.compare(0, 17, "wholestagecodegen") == 0) {
+    auto function_node =
+        std::dynamic_pointer_cast<gandiva::FunctionNode>(node->children()[0]);
+    RETURN_NOT_OK((*out)->MakeExprVisitorImpl(
+        func_name, function_node, schema_ptr->fields(), ret_fields, (*out).get()));
+  } else if (func_name.compare("standalone") == 0) {
+    auto function_node =
+        std::dynamic_pointer_cast<gandiva::FunctionNode>(node->children()[0]);
+    RETURN_NOT_OK((*out)->MakeExprVisitorImpl(
+        func_name, function_node, schema_ptr->fields(), ret_fields, (*out).get()));
+  } else if (func_name.compare("codegen_withOneInput") == 0) {
+    auto children = node->children();
     if (children.size() != 2) {
       return arrow::Status::Invalid("codegen_withOneInput expects three arguments");
     }
@@ -191,12 +219,11 @@ arrow::Status ExprVisitor::Make(const gandiva::FunctionNode& node,
       auto field_node = std::dynamic_pointer_cast<gandiva::FieldNode>(field);
       field_list.push_back(field_node->field());
     }
-    *out = std::make_shared<ExprVisitor>(func_name);
     RETURN_NOT_OK((*out)->MakeExprVisitorImpl(codegen_func_node->descriptor()->name(),
                                               codegen_func_node, field_list, ret_fields,
                                               (*out).get()));
   } else if (func_name.compare("codegen_withTwoInputs") == 0) {
-    auto children = node.children();
+    auto children = node->children();
     if (children.size() != 3) {
       return arrow::Status::Invalid("codegen_withTwoInputs expects three arguments");
     }
@@ -217,11 +244,51 @@ arrow::Status ExprVisitor::Make(const gandiva::FunctionNode& node,
       auto field_node = std::dynamic_pointer_cast<gandiva::FieldNode>(field);
       right_field_list.push_back(field_node->field());
     }
-    *out = std::make_shared<ExprVisitor>(func_name);
     RETURN_NOT_OK((*out)->MakeExprVisitorImpl(
         codegen_func_node->descriptor()->name(), codegen_func_node, left_field_list,
         right_field_list, ret_fields, (*out).get()));
   }
+  return arrow::Status::OK();
+}
+
+arrow::Status ExprVisitor::MakeWindow(std::shared_ptr<arrow::Schema> schema_ptr,
+                                      std::vector<std::shared_ptr<arrow::Field>> ret_fields,
+                                      const gandiva::FunctionNode& node,
+                                      std::shared_ptr<ExprVisitor>* out) {
+  auto func_name = node.descriptor()->name();
+  if (func_name != "window") {
+    return arrow::Status::Invalid("window's Gandiva function name mismatch");
+  }
+  *out = std::make_shared<ExprVisitor>(schema_ptr, func_name);
+  std::vector<std::shared_ptr<gandiva::FunctionNode>> window_functions;
+  std::shared_ptr<gandiva::FunctionNode> partition_spec;
+  std::shared_ptr<gandiva::FunctionNode> order_spec;
+  std::shared_ptr<gandiva::FunctionNode> frame_spec;
+
+  for (const auto& child : node.children()) {
+    auto child_function = std::dynamic_pointer_cast<gandiva::FunctionNode>(child);
+    auto child_func_name = child_function->descriptor()->name();
+    if (child_func_name == "sum" || child_func_name == "avg" ||
+        child_func_name == "rank_asc" || child_func_name == "rank_desc") {
+      window_functions.push_back(child_function);
+    } else if (child_func_name == "partitionSpec") {
+      partition_spec = child_function;
+    } else if (child_func_name == "orderSpec") {
+      order_spec = child_function;
+    } else if (child_func_name == "frameSpec") {
+      frame_spec = child_function;
+    } else {
+      return arrow::Status::Invalid("unsupported child function name in window: " +
+                                    child_func_name);
+    }
+  }
+
+  if (window_functions.empty()) {
+    return arrow::Status::Invalid("no available function found in window");
+  }
+  RETURN_NOT_OK((*out)->MakeExprVisitorImpl(func_name, window_functions, partition_spec,
+                                            order_spec, frame_spec, ret_fields,
+                                            (*out).get()));
   return arrow::Status::OK();
 }
 
@@ -240,6 +307,9 @@ ExprVisitor::ExprVisitor(std::shared_ptr<arrow::Schema> schema_ptr, std::string 
 
 ExprVisitor::ExprVisitor(std::string func_name) : func_name_(func_name) {}
 
+ExprVisitor::ExprVisitor(std::shared_ptr<arrow::Schema> schema_ptr, std::string func_name)
+    : schema_(schema_ptr), func_name_(func_name) {}
+
 arrow::Status ExprVisitor::MakeExprVisitorImpl(
     const std::string& func_name, std::shared_ptr<gandiva::FunctionNode> func_node,
     std::vector<std::shared_ptr<arrow::Field>> field_list,
@@ -247,6 +317,23 @@ arrow::Status ExprVisitor::MakeExprVisitorImpl(
   if (func_name.compare("hashAggregateArrays") == 0) {
     RETURN_NOT_OK(HashAggregateArraysVisitorImpl::Make(field_list, func_node->children(),
                                                        ret_fields, p, &impl_));
+    goto finish;
+  } else if (func_name.compare(0, 17, "wholestagecodegen") == 0) {
+    RETURN_NOT_OK(
+        WholeStageCodeGenVisitorImpl::Make(field_list, func_node, ret_fields, p, &impl_));
+    goto finish;
+  } else if (func_name.compare("standalone") == 0) {
+    auto child_func_name = func_node->descriptor()->name();
+    if (child_func_name.compare(0, 22, "conditionedProbeArrays") == 0) {
+      RETURN_NOT_OK(ConditionedProbeArraysVisitorImpl::Make(field_list, func_node,
+                                                            ret_fields, p, &impl_));
+    } else if (child_func_name.compare("HashRelation") == 0) {
+      RETURN_NOT_OK(
+          HashRelationVisitorImpl::Make(field_list, func_node, ret_fields, p, &impl_));
+    } else if (child_func_name.compare("sortArraysToIndices") == 0) {
+      RETURN_NOT_OK(SortArraysToIndicesVisitorImpl::Make(field_list, func_node, 
+                                                         ret_fields, p, &impl_));
+    }
     goto finish;
   }
 finish:
@@ -299,7 +386,7 @@ arrow::Status ExprVisitor::MakeExprVisitorImpl(
     } else if (func_name.compare("conditionedProbeArraysExistence") == 0) {
       join_type = 4;
     }
-    RETURN_NOT_OK(ConditionedProbeArraysVisitorImpl::Make(
+    RETURN_NOT_OK(CodegenProbeArraysVisitorImpl::Make(
         left_key_list, right_key_list, condition_node, join_type, left_field_list,
         right_field_list, ret_fields, p, &impl_));
     goto finish;
@@ -373,22 +460,6 @@ arrow::Status ExprVisitor::MakeExprVisitorImpl(const std::string& func_name,
     RETURN_NOT_OK(EncodeVisitorImpl::Make(p, &impl_));
     goto finish;
   }
-  if (func_name.compare("sortArraysToIndicesNullsFirstAsc") == 0) {
-    RETURN_NOT_OK(SortArraysToIndicesVisitorImpl::Make(p, &impl_, true, true));
-    goto finish;
-  }
-  if (func_name.compare("sortArraysToIndicesNullsLastAsc") == 0) {
-    RETURN_NOT_OK(SortArraysToIndicesVisitorImpl::Make(p, &impl_, false, true));
-    goto finish;
-  }
-  if (func_name.compare("sortArraysToIndicesNullsFirstDesc") == 0) {
-    RETURN_NOT_OK(SortArraysToIndicesVisitorImpl::Make(p, &impl_, true, false));
-    goto finish;
-  }
-  if (func_name.compare("sortArraysToIndicesNullsLastDesc") == 0) {
-    RETURN_NOT_OK(SortArraysToIndicesVisitorImpl::Make(p, &impl_, false, false));
-    goto finish;
-  }
   goto unrecognizedFail;
 finish:
   return arrow::Status::OK();
@@ -396,6 +467,42 @@ finish:
 unrecognizedFail:
   return arrow::Status::NotImplemented("Function name ", func_name,
                                        " is not implemented yet.");
+}
+
+arrow::Status ExprVisitor::MakeExprVisitorImpl(
+    const std::string& func_name, std::vector<std::shared_ptr<gandiva::FunctionNode>> window_functions,
+    std::shared_ptr<gandiva::FunctionNode> partition_spec,
+    std::shared_ptr<gandiva::FunctionNode> order_spec,
+    std::shared_ptr<gandiva::FunctionNode> frame_spec,
+    std::vector<std::shared_ptr<arrow::Field>> ret_fields, ExprVisitor* p) {
+  std::vector<std::string> window_function_names;
+  std::vector<std::vector<gandiva::FieldPtr>> function_param_fields;
+  for (auto window_function : window_functions) {
+    std::string window_function_name = window_function->descriptor()->name();
+    std::vector<gandiva::FieldPtr> function_param_fields_of_each;
+    for (std::shared_ptr<gandiva::Node> child : window_function->children()) {
+      std::shared_ptr<gandiva::FieldNode> field =
+          std::dynamic_pointer_cast<gandiva::FieldNode>(child);
+      function_param_fields_of_each.push_back(field->field());
+    }
+    window_function_names.push_back(window_function_name);
+    function_param_fields.push_back(function_param_fields_of_each);
+  }
+  std::vector<gandiva::FieldPtr> partition_fields;
+  for (std::shared_ptr<gandiva::Node> child : partition_spec->children()) {
+    std::shared_ptr<gandiva::FieldNode> field =
+        std::dynamic_pointer_cast<gandiva::FieldNode>(child);
+    partition_fields.push_back(field->field());
+  }
+  std::vector<std::shared_ptr<arrow::DataType>> return_types;
+  for (auto return_field : ret_fields) {
+    std::shared_ptr<arrow::DataType> type = return_field->type();
+    return_types.push_back(type);
+  }
+  // todo order_spec frame_spec
+  RETURN_NOT_OK(WindowVisitorImpl::Make(p, window_function_names, return_types,
+                                        function_param_fields, partition_fields, &impl_));
+  return arrow::Status();
 }
 
 arrow::Status ExprVisitor::AppendAction(const std::string& func_name,
@@ -580,17 +687,15 @@ arrow::Status ExprVisitor::Finish(std::shared_ptr<ExprVisitor>* finish_visitor) 
   return arrow::Status::OK();
 }
 
-arrow::Status ExprVisitor::MakeResultIterator(
-    std::shared_ptr<arrow::Schema> schema,
-    std::shared_ptr<ResultIterator<arrow::RecordBatch>>* out) {
+arrow::Status ExprVisitor::MakeResultIterator(std::shared_ptr<arrow::Schema> schema,
+                                              std::shared_ptr<ResultIteratorBase>* out) {
   if (dependency_) {
     std::shared_ptr<ExprVisitor> dummy;
     RETURN_NOT_OK(dependency_->Finish(&dummy));
     RETURN_NOT_OK(GetResultFromDependency());
   }
   if (!finish_visitor_) {
-    RETURN_NOT_OK(impl_->MakeResultIterator(schema, &result_batch_iterator_));
-    *out = result_batch_iterator_;
+    RETURN_NOT_OK(impl_->MakeResultIterator(schema, out));
   } else {
     return arrow::Status::NotImplemented(
         "FinishVsitor MakeResultIterator is not tested, so mark as not implemented "

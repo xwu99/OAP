@@ -26,9 +26,9 @@ Most customers adopt Spark SQL as a batch processing engine. Unfortunately, cust
 For example, the following interactive query attempts to filter out a very small result set from a huge fact table.
 
 ```
-select ss_sold_date_sk, ss_sold_time_sk, ss_item_sk, ss_cdemo_sk, ss_store_sk, ss_ticket_number, ss_ext_discount_amt, ss_ext_wholesale_cost, ss_ext_tax
-	from fact.store_sales
-	where (date='20200801' and store_customer='xxx' and ss_item_sk='806486’)
+select ss_sold_date_sk, ss_sold_time_sk, ss_item_sk, ss_cdemo_sk, ss_store_sk, ss_ticket_number, 	ss_ext_discount_amt, ss_ext_wholesale_cost, ss_ext_tax
+	from fact.ss_sales
+	where (date='20200801' and ss_customer='xxx' and ss_item_sk='806486’)
 	limit 10
 ```
 
@@ -63,7 +63,7 @@ SQL Index and Data Source Cache acts as a `.jar` plug-in for Spark SQL.
 
 - OAP's two major optimization functionalities (indexing and caching) are based on unified representation and the adapter. 
    - Indices can be created on one or multiple columns of a data file. 
-   - Currently, Data Source Cache only caches decompressed and decoding data, and will support raw data in the future. Generally, the server's DRAM is used as the cache medium. [PMem](https://www.intel.com/content/www/us/en/architecture-and-technology/optane-dc-persistent-memory.html) can also be used as the cache medium as it will provide a more cost effective solution for the requirements of a high performance environment.
+   - Data Source Cache can cache both decompressed and decoded vectorized data and bianry raw data. Generally, the server's DRAM is used as the cache medium. [PMem](https://www.intel.com/content/www/us/en/architecture-and-technology/optane-dc-persistent-memory.html) can also be used as the cache medium as it will provide a more cost effective solution for the requirements of a high performance environment.
 
 - Both indexing and caching as ***Optimizer & Execution*** are transparent for users. See the [Features](#Features) section for details.
 

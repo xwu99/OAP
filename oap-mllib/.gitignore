@@ -1,5 +1,4 @@
 *.sh
 *.o
 *.log
-*.o
 .vscode

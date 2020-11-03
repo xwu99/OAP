@@ -35,7 +35,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.OapException
 import org.apache.spark.sql.execution.datasources.oap.filecache._
 import org.apache.spark.sql.execution.datasources.oap.orc.{OrcMapreduceRecordReader, _}
-import org.apache.spark.sql.execution.vectorized.OnHeapColumnVector
+import org.apache.spark.sql.execution.vectorized.OapOnHeapColumnVector
 import org.apache.spark.sql.internal.oap.OapConf
 import org.apache.spark.sql.oap.OapRuntime
 import org.apache.spark.sql.sources.Filter
@@ -70,7 +70,9 @@ private[oap] case class OrcDataFile(
   private lazy val filePath: Path = new Path(path)
   private lazy val orcDataCacheEnable =
     configuration.getBoolean(OapConf.OAP_ORC_DATA_CACHE_ENABLED.key,
-      OapConf.OAP_ORC_DATA_CACHE_ENABLED.defaultValue.get)
+      OapConf.OAP_ORC_DATA_CACHE_ENABLED.defaultValue.get) ||
+      configuration.getBoolean(OapConf.OAP_ORC_DATA_CACHE_ENABLE.key,
+        OapConf.OAP_ORC_DATA_CACHE_ENABLE.defaultValue.get)
   lazy val meta =
     OapRuntime.getOrCreate.dataFileMetaCacheManager.get(this).asInstanceOf[OrcDataFileMeta]
 //  meta.getOrcFileReader()
@@ -213,7 +215,7 @@ private[oap] case class OrcDataFile(
   override def getDataFileMeta(): DataFileMeta =
     new OrcDataFileMeta(filePath, configuration)
 
-  override def cache(groupId: Int, fiberId: Int): FiberCache = {
+  override def cache(groupId: Int, fiberId: Int, fiber: FiberId = null): FiberCache = {
     val fileSchema = fileReader.getSchema
     val columnTypeDesc = TypeDescription.createStruct()
       .addField(fileSchema.getFieldNames.get(fiberId), fileSchema.getChildren.get(fiberId))
@@ -228,7 +230,7 @@ private[oap] case class OrcDataFile(
 
     val fromColumn = vectorizedRowBatch.cols(0)
     val field = schema.fields(fiberId)
-    val toColumn = new OnHeapColumnVector(rowCount, field.dataType)
+    val toColumn = new OapOnHeapColumnVector(rowCount, field.dataType)
     if (fromColumn.isRepeating) {
      OrcCacheReader.putRepeatingValues(rowCount, field, fromColumn, toColumn)
     }
@@ -238,6 +240,6 @@ private[oap] case class OrcDataFile(
     else {
       OrcCacheReader.putValues(rowCount, field, fromColumn, toColumn)
     }
-    ParquetDataFiberWriter.dumpToCache(toColumn, rowCount)
+    OrcDataFiberWriter.orcDumpToCache(toColumn, rowCount, fiber)
   }
 }

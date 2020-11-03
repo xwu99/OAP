@@ -31,6 +31,7 @@
 #include <string>
 
 #include "codegen/code_generator_factory.h"
+#include "codegen/common/hash_relation.h"
 #include "codegen/common/result_iterator.h"
 #include "data_source/parquet/adapter.h"
 #include "jni/concurrent_map.h"
@@ -61,7 +62,7 @@ static jint JNI_VERSION = JNI_VERSION_1_8;
 
 using CodeGenerator = sparkcolumnarplugin::codegen::CodeGenerator;
 static arrow::jni::ConcurrentMap<std::shared_ptr<CodeGenerator>> handler_holder_;
-static arrow::jni::ConcurrentMap<std::shared_ptr<ResultIterator<arrow::RecordBatch>>>
+static arrow::jni::ConcurrentMap<std::shared_ptr<ResultIteratorBase>>
     batch_iterator_holder_;
 
 using sparkcolumnarplugin::shuffle::SplitOptions;
@@ -79,14 +80,19 @@ std::shared_ptr<CodeGenerator> GetCodeGenerator(JNIEnv* env, jlong id) {
   return handler;
 }
 
-std::shared_ptr<ResultIterator<arrow::RecordBatch>> GetBatchIterator(JNIEnv* env,
-                                                                     jlong id) {
+std::shared_ptr<ResultIteratorBase> GetBatchIterator(JNIEnv* env, jlong id) {
   auto handler = batch_iterator_holder_.Lookup(id);
   if (!handler) {
     std::string error_message = "invalid handler id " + std::to_string(id);
     env->ThrowNew(illegal_argument_exception_class, error_message.c_str());
   }
   return handler;
+}
+
+template <typename T>
+std::shared_ptr<ResultIterator<T>> GetBatchIterator(JNIEnv* env, jlong id) {
+  auto handler = GetBatchIterator(env, id);
+  return std::dynamic_pointer_cast<ResultIterator<T>>(handler);
 }
 
 jobject MakeRecordBatchBuilder(JNIEnv* env, std::shared_ptr<arrow::Schema> schema,
@@ -272,7 +278,7 @@ Java_com_intel_oap_vectorized_ExpressionEvaluatorJniWrapper_nativeBuild(
 
 #ifdef DEBUG
   for (auto expr : expr_vector) {
-    std::cerr << expr->ToString() << std::endl;
+    std::cout << expr->ToString() << std::endl;
   }
 #endif
 
@@ -572,7 +578,7 @@ Java_com_intel_oap_vectorized_ExpressionEvaluatorJniWrapper_nativeFinishByIterat
     JNIEnv* env, jobject obj, jlong id) {
   arrow::Status status;
   std::shared_ptr<CodeGenerator> handler = GetCodeGenerator(env, id);
-  std::shared_ptr<ResultIterator<arrow::RecordBatch>> out;
+  std::shared_ptr<ResultIteratorBase> out;
   status = handler->finish(&out);
   if (!status.ok()) {
     std::string error_message =
@@ -588,7 +594,7 @@ Java_com_intel_oap_vectorized_ExpressionEvaluatorJniWrapper_nativeSetDependency(
     JNIEnv* env, jobject obj, jlong id, jlong iter_id, int index) {
   arrow::Status status;
   std::shared_ptr<CodeGenerator> handler = GetCodeGenerator(env, id);
-  auto iter = GetBatchIterator(env, iter_id);
+  auto iter = GetBatchIterator<arrow::RecordBatch>(env, iter_id);
   status = handler->SetDependency(iter, index);
   if (!status.ok()) {
     std::string error_message =
@@ -597,10 +603,16 @@ Java_com_intel_oap_vectorized_ExpressionEvaluatorJniWrapper_nativeSetDependency(
   }
 }
 
+JNIEXPORT jboolean JNICALL Java_com_intel_oap_vectorized_BatchIterator_nativeHasNext(
+    JNIEnv* env, jobject obj, jlong id) {
+  auto iter = GetBatchIterator(env, id);
+  return iter->HasNext();
+}
+
 JNIEXPORT jobject JNICALL Java_com_intel_oap_vectorized_BatchIterator_nativeNext(
     JNIEnv* env, jobject obj, jlong id) {
   arrow::Status status;
-  auto iter = GetBatchIterator(env, id);
+  auto iter = GetBatchIterator<arrow::RecordBatch>(env, id);
   std::shared_ptr<arrow::RecordBatch> out;
   if (!iter->HasNext()) return nullptr;
   status = iter->Next(&out);
@@ -642,7 +654,7 @@ JNIEXPORT jobject JNICALL Java_com_intel_oap_vectorized_BatchIterator_nativeProc
     in.push_back(batch->column(i));
   }
 
-  auto iter = GetBatchIterator(env, id);
+  auto iter = GetBatchIterator<arrow::RecordBatch>(env, id);
   std::shared_ptr<arrow::RecordBatch> out;
   status = iter->Process(in, &out);
 
@@ -690,7 +702,7 @@ Java_com_intel_oap_vectorized_BatchIterator_nativeProcessWithSelection(
     in.push_back(batch->column(i));
   }
 
-  auto iter = GetBatchIterator(env, id);
+  auto iter = GetBatchIterator<arrow::RecordBatch>(env, id);
   // Make Array From SelectionVector
   auto selection_vector_buf = std::make_shared<arrow::MutableBuffer>(
       reinterpret_cast<uint8_t*>(selection_vector_buf_addr), selection_vector_buf_size);
@@ -745,7 +757,7 @@ Java_com_intel_oap_vectorized_BatchIterator_nativeProcessAndCacheOne(
     in.push_back(batch->column(i));
   }
 
-  auto iter = GetBatchIterator(env, id);
+  auto iter = GetBatchIterator<arrow::RecordBatch>(env, id);
   status = iter->ProcessAndCacheOne(in);
 
   if (!status.ok()) {
@@ -790,7 +802,7 @@ Java_com_intel_oap_vectorized_BatchIterator_nativeProcessAndCacheOneWithSelectio
     in.push_back(batch->column(i));
   }
 
-  auto iter = GetBatchIterator(env, id);
+  auto iter = GetBatchIterator<arrow::RecordBatch>(env, id);
   // Make Array From SelectionVector
   auto selection_vector_buf = std::make_shared<arrow::MutableBuffer>(
       reinterpret_cast<uint8_t*>(selection_vector_buf_addr), selection_vector_buf_size);
@@ -809,6 +821,20 @@ Java_com_intel_oap_vectorized_BatchIterator_nativeProcessAndCacheOneWithSelectio
 
   env->ReleaseLongArrayElements(buf_addrs, in_buf_addrs, JNI_ABORT);
   env->ReleaseLongArrayElements(buf_sizes, in_buf_sizes, JNI_ABORT);
+}
+
+JNIEXPORT void JNICALL Java_com_intel_oap_vectorized_BatchIterator_nativeSetDependencies(
+    JNIEnv* env, jobject this_obj, jlong id, jlongArray ids) {
+  int ids_size = env->GetArrayLength(ids);
+  long* ids_data = env->GetLongArrayElements(ids, 0);
+  std::vector<std::shared_ptr<ResultIteratorBase>> dependent_batch_list;
+  for (int i = 0; i < ids_size; i++) {
+    auto handler = GetBatchIterator(env, ids_data[i]);
+    dependent_batch_list.push_back(handler);
+  }
+  auto iter = GetBatchIterator<arrow::RecordBatch>(env, id);
+  iter->SetDependencies(dependent_batch_list);
+  env->ReleaseLongArrayElements(ids, ids_data, JNI_ABORT);
 }
 
 JNIEXPORT void JNICALL Java_com_intel_oap_vectorized_BatchIterator_nativeClose(
@@ -1173,6 +1199,29 @@ Java_com_intel_oap_vectorized_ShuffleSplitterJniWrapper_nativeMake(
       return 0;
     }
   }
+
+  jclass cls = env->FindClass("java/lang/Thread");
+  jmethodID mid = env->GetStaticMethodID(cls, "currentThread", "()Ljava/lang/Thread;");
+  jobject thread = env->CallStaticObjectMethod(cls, mid);
+  if (thread == NULL) {
+    std::cout << "Thread.currentThread() return NULL" << std::endl;
+  } else {
+    jmethodID mid_getid = env->GetMethodID(cls, "getId", "()J");
+    jlong sid = env->CallLongMethod(thread, mid_getid);
+    splitOptions.thread_id = (int64_t)sid;
+  }
+
+  jclass tc_cls = env->FindClass("org/apache/spark/TaskContext");
+  jmethodID get_tc_mid = env->GetStaticMethodID(tc_cls, "get", "()Lorg/apache/spark/TaskContext;");
+  jobject tc_obj = env->CallStaticObjectMethod(tc_cls, get_tc_mid);
+  if (tc_obj == NULL) {
+    std::cout << "TaskContext.get() return NULL" << std::endl;
+  } else {
+    jmethodID get_tsk_attmpt_mid = env->GetMethodID(tc_cls, "taskAttemptId", "()J");
+    jlong attmpt_id = env->CallLongMethod(tc_obj, get_tsk_attmpt_mid);
+    splitOptions.task_attempt_id = (int64_t)attmpt_id;
+  }
+
   auto make_result = Splitter::Make(partitioning_name, std::move(schema), num_partitions,
                                     expr_vector, std::move(splitOptions));
   if (!make_result.ok()) {

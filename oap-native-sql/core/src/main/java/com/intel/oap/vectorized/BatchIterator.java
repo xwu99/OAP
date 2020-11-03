@@ -30,6 +30,7 @@ import org.apache.arrow.vector.ipc.message.ArrowBuffer;
 import org.apache.arrow.vector.ipc.message.MessageSerializer;
 
 public class BatchIterator {
+  private native boolean nativeHasNext(long nativeHandler);
   private native ArrowRecordBatchBuilder nativeNext(long nativeHandler);
   private native ArrowRecordBatchBuilder nativeProcess(long nativeHandler, byte[] schemaBuf, int numRows, long[] bufAddrs, long[] bufSizes);
   private native void nativeProcessAndCacheOne(long nativeHandler, byte[] schemaBuf, int numRows, long[] bufAddrs, long[] bufSizes);
@@ -37,6 +38,7 @@ public class BatchIterator {
       int selectionVectorRecordCount, long selectionVectorAddr, long selectionVectorSize);
   private native void nativeProcessAndCacheOneWithSelection(long nativeHandler, byte[] schemaBuf, int numRows, long[] bufAddrs, long[] bufSizes,
       int selectionVectorRecordCount, long selectionVectorAddr, long selectionVectorSize);
+  private native void nativeSetDependencies(long nativeHandler, long[] dependencies);
 
   private native void nativeClose(long nativeHandler);
 
@@ -49,6 +51,10 @@ public class BatchIterator {
   public BatchIterator(long instance_id) throws IOException {
     JniUtils.getInstance();
     nativeHandler = instance_id;
+  }
+
+  public boolean hasNext() throws IOException {
+    return nativeHasNext(nativeHandler);
   }
 
   public ArrowRecordBatch next() throws IOException {
@@ -146,6 +152,15 @@ public class BatchIterator {
       nativeProcessAndCacheOne(nativeHandler, getSchemaBytesBuf(schema), num_rows, bufAddrs, bufSizes);
     }
   }
+
+  public void setDependencies(BatchIterator[] dependencies){
+    long[] instanceIdList = new long[dependencies.length];
+    for (int i = 0; i < dependencies.length; i++) {
+      instanceIdList[i] = dependencies[i].getInstanceId();
+    }
+    nativeSetDependencies(nativeHandler, instanceIdList);
+  }
+
 
   public void close() {
     if (!closed) {

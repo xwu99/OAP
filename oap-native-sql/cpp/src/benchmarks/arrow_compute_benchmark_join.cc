@@ -26,7 +26,9 @@
 #include <gtest/gtest.h>
 #include <parquet/arrow/reader.h>
 #include <parquet/file_reader.h>
+
 #include <chrono>
+
 #include "codegen/code_generator.h"
 #include "codegen/code_generator_factory.h"
 #include "codegen/common/result_iterator.h"
@@ -133,12 +135,6 @@ TEST_F(BenchmarkArrowComputeJoin, JoinBenchmark) {
       "codegen_right_schema", {right_field_node_list[right_primary_key_index]}, uint32());
   auto f_res = field("res", uint32());
 
-  auto n_probeArrays = TreeExprBuilder::MakeFunction(
-      "conditionedProbeArraysInner", {n_left_key, n_right_key}, indices_type);
-  auto n_codegen_probe = TreeExprBuilder::MakeFunction(
-      "codegen_withTwoInputs", {n_probeArrays, n_left, n_right}, uint32());
-  auto probeArrays_expr = TreeExprBuilder::MakeExpression(n_codegen_probe, f_indices);
-
   auto schema_table_0 = arrow::schema(left_field_list);
   auto schema_table_1 = arrow::schema(right_field_list);
   std::vector<std::shared_ptr<Field>> field_list(left_field_list.size() +
@@ -146,12 +142,36 @@ TEST_F(BenchmarkArrowComputeJoin, JoinBenchmark) {
   std::merge(left_field_list.begin(), left_field_list.end(), right_field_list.begin(),
              right_field_list.end(), field_list.begin());
   auto schema_table = arrow::schema(field_list);
-  ///////////////////// Calculation //////////////////
-  std::shared_ptr<CodeGenerator> expr_probe;
-  std::shared_ptr<CodeGenerator> expr_shuffle;
 
+  ::gandiva::NodeVector result_node_list;
+  for (auto field : field_list) {
+    result_node_list.push_back(TreeExprBuilder::MakeField(field));
+  }
+  auto n_result = TreeExprBuilder::MakeFunction("result", result_node_list, uint32());
+
+  auto n_probeArrays = TreeExprBuilder::MakeFunction(
+      "conditionedProbeArraysInner", {n_left, n_right, n_left_key, n_right_key, n_result},
+      uint32());
+  auto n_standalone =
+      TreeExprBuilder::MakeFunction("standalone", {n_probeArrays}, uint32());
+
+  auto probeArrays_expr = TreeExprBuilder::MakeExpression(n_standalone, f_res);
+
+  auto n_hash_kernel =
+      TreeExprBuilder::MakeFunction("HashRelation", {n_left_key}, uint32());
+  auto n_hash = TreeExprBuilder::MakeFunction("standalone", {n_hash_kernel}, uint32());
+  auto hashRelation_expr = TreeExprBuilder::MakeExpression(n_hash, f_res);
+  std::shared_ptr<CodeGenerator> expr_build;
+  ASSERT_NOT_OK(
+      CreateCodeGenerator(schema_table_0, {hashRelation_expr}, {}, &expr_build, true));
+  std::shared_ptr<CodeGenerator> expr_probe;
+  ASSERT_NOT_OK(CreateCodeGenerator(schema_table_1, {probeArrays_expr}, field_list,
+                                    &expr_probe, true));
+
+  ///////////////////// Calculation //////////////////
   std::vector<std::shared_ptr<arrow::RecordBatch>> dummy_result_batches;
-  std::shared_ptr<ResultIterator<arrow::RecordBatch>> probe_result_iterator;
+  std::shared_ptr<ResultIteratorBase> build_result_iterator;
+  std::shared_ptr<ResultIteratorBase> probe_result_iterator_base;
 
   ////////////////////// evaluate //////////////////////
   std::shared_ptr<arrow::RecordBatch> left_record_batch;
@@ -166,22 +186,24 @@ TEST_F(BenchmarkArrowComputeJoin, JoinBenchmark) {
   uint64_t num_batches = 0;
   uint64_t num_rows = 0;
 
-  TIME_MICRO_OR_THROW(elapse_gen, CreateCodeGenerator(left_schema, {probeArrays_expr},
-                                                      field_list, &expr_probe, true));
-
   do {
     TIME_MICRO_OR_THROW(elapse_left_read,
                         left_record_batch_reader->ReadNext(&left_record_batch));
     if (left_record_batch) {
       TIME_MICRO_OR_THROW(elapse_eval,
-                          expr_probe->evaluate(left_record_batch, &dummy_result_batches));
+                          expr_build->evaluate(left_record_batch, &dummy_result_batches));
       num_batches += 1;
     }
   } while (left_record_batch);
   std::cout << "Readed left table with " << num_batches << " batches." << std::endl;
 
-  TIME_MICRO_OR_THROW(elapse_finish, expr_probe->finish(&probe_result_iterator));
+  TIME_MICRO_OR_THROW(elapse_finish, expr_build->finish(&build_result_iterator));
+  TIME_MICRO_OR_THROW(elapse_finish, expr_probe->finish(&probe_result_iterator_base));
+  auto probe_result_iterator =
+      std::dynamic_pointer_cast<ResultIterator<arrow::RecordBatch>>(
+          probe_result_iterator_base);
 
+  probe_result_iterator->SetDependencies({build_result_iterator});
   num_batches = 0;
   uint64_t num_output_batches = 0;
   std::shared_ptr<arrow::RecordBatch> out;
@@ -261,7 +283,7 @@ TEST_F(BenchmarkArrowComputeJoin, JoinBenchmarkWithCondition) {
   std::shared_ptr<CodeGenerator> expr_probe;
 
   std::vector<std::shared_ptr<arrow::RecordBatch>> dummy_result_batches;
-  std::shared_ptr<ResultIterator<arrow::RecordBatch>> probe_result_iterator;
+  std::shared_ptr<ResultIteratorBase> probe_result_iterator_base;
 
   ////////////////////// evaluate //////////////////////
   std::shared_ptr<arrow::RecordBatch> left_record_batch;
@@ -290,7 +312,10 @@ TEST_F(BenchmarkArrowComputeJoin, JoinBenchmarkWithCondition) {
   } while (left_record_batch);
   std::cout << "Readed left table with " << num_batches << " batches." << std::endl;
 
-  TIME_MICRO_OR_THROW(elapse_finish, expr_probe->finish(&probe_result_iterator));
+  TIME_MICRO_OR_THROW(elapse_finish, expr_probe->finish(&probe_result_iterator_base));
+  auto probe_result_iterator =
+      std::dynamic_pointer_cast<ResultIterator<arrow::RecordBatch>>(
+          probe_result_iterator_base);
 
   num_batches = 0;
   uint64_t num_output_batches = 0;
