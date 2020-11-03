@@ -48,15 +48,6 @@ fi
 
 export HADOOP_CONF_DIR=$HADOOP_HOME/etc/hadoop
 
-# Target jar built
-OAP_MLLIB_JAR_NAME=oap-mllib-0.9.0-with-spark-3.0.0.jar
-OAP_MLLIB_JAR=$OAP_MLLIB_ROOT/mllib-dal/target/$OAP_MLLIB_JAR_NAME
-
-# Use absolute path
-SPARK_DRIVER_CLASSPATH=$OAP_MLLIB_JAR
-# Use relative path
-SPARK_EXECUTOR_CLASSPATH=./$OAP_MLLIB_JAR_NAME
-
 APP_PY=pca-pyspark.py
 K=10
 
@@ -68,11 +59,8 @@ K=10
     --conf "spark.serializer=org.apache.spark.serializer.KryoSerializer" \
     --conf "spark.default.parallelism=$SPARK_DEFAULT_PARALLELISM" \
     --conf "spark.sql.shuffle.partitions=$SPARK_DEFAULT_PARALLELISM" \
-    --conf "spark.driver.extraClassPath=$SPARK_DRIVER_CLASSPATH" \
-    --conf "spark.executor.extraClassPath=$SPARK_EXECUTOR_CLASSPATH" \
     --conf "spark.shuffle.reduceLocality.enabled=false" \
     --conf "spark.network.timeout=1200s" \
     --conf "spark.task.maxFailures=1" \
-    --jars $OAP_MLLIB_JAR \
     $APP_PY $DATA_FILE $K \
-    2>&1 | tee PCA-$(date +%m%d_%H_%M_%S).log
+    2>&1 | tee PCA-vanilla-$(date +%m%d_%H_%M_%S).log
