@@ -25,16 +25,26 @@ import org.apache.spark.ml.util.{OneCCL, OneDAL, Utils}
 import org.apache.spark.mllib.feature.{PCAModel => MLlibPCAModel}
 import org.apache.spark.mllib.linalg.{DenseMatrix => OldDenseMatrix, Vectors => OldVectors}
 import org.apache.spark.rdd.RDD
-
+import org.apache.spark.mllib.feature.{ StandardScaler => MLlibStandardScaler }
 
 class PCADALImpl (
     val k: Int,
     val executorNum: Int,
     val executorCores: Int) extends Serializable {
 
-  def fitWithCorrelation(input: RDD[Vector]) : MLlibPCAModel = {
+  // Normalize data before apply fitWithDAL
+  private def normalizeData(input: RDD[Vector]) : RDD[Vector] = {
+    val vectors = input.map(OldVectors.fromML(_))
+    val scaler = new MLlibStandardScaler(withMean = true, withStd = false).fit(vectors)
+    val res = scaler.transform(vectors)
+    res.map(_.asML)
+  }
 
-    val coalescedTables = OneDAL.rddVectorToNumericTables(input, executorNum)
+  def fitWithDAL(input: RDD[Vector]) : MLlibPCAModel = {
+
+    val normalizedData = normalizeData(input)
+
+    val coalescedTables = OneDAL.rddVectorToNumericTables(normalizedData, executorNum)
 
     val executorIPAddress = Utils.sparkFirstExecutorIP(input.sparkContext)
 
@@ -43,7 +53,7 @@ class PCADALImpl (
       OneCCL.init(executorNum, executorIPAddress, OneCCL.KVS_PORT)
 
       var result = new PCAResult()
-      cPCADALCorrelation(
+      cPCATrainDAL(
         tableArr,
         k,
         executorNum,
@@ -83,7 +93,7 @@ class PCADALImpl (
     parentModel
   }
 
-  def getPrincipleComponentsFromDAL(table: NumericTable, k: Int): DenseMatrix = {
+  private def getPrincipleComponentsFromDAL(table: NumericTable, k: Int): DenseMatrix = {
     val data = table.asInstanceOf[HomogenNumericTable].getDoubleArray()
 
     val numRows = table.getNumberOfRows.toInt
@@ -105,7 +115,7 @@ class PCADALImpl (
     result
   }
 
-  def getExplainedVarianceFromDAL(table_1xn: NumericTable, k: Int): DenseVector = {
+  private def getExplainedVarianceFromDAL(table_1xn: NumericTable, k: Int): DenseVector = {
     val data = table_1xn.asInstanceOf[HomogenNumericTable].getDoubleArray()
     val sum = data.sum
     val topK = Arrays.copyOfRange(data, 0, k)
@@ -115,10 +125,10 @@ class PCADALImpl (
   }
 
   // Single entry to call Correlation PCA DAL backend with parameter K
-  @native private def cPCADALCorrelation(data: Long,
-                                         k: Int,
-                                         executor_num: Int,
-                                         executor_cores: Int,
-                                         result: PCAResult): Long
+  @native private def cPCATrainDAL(data: Long,
+                                   k: Int,
+                                   executor_num: Int,
+                                   executor_cores: Int,
+                                   result: PCAResult): Long
 
 }

@@ -2,7 +2,7 @@
 
 WORK_DIR="$( cd $( dirname "${BASH_SOURCE[0]}" ) && pwd )"
 
-DAAL_JAR=${ONEAPI_ROOT}/daal/latest/lib/daal.jar
+DAAL_JAR=${ONEAPI_ROOT}/dal/latest/lib/onedal.jar
 
 if [ ! -f "$DAAL_JAR" ]; then
     echo $DAAL_JAR does not exist!

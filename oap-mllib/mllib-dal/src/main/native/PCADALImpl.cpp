@@ -18,10 +18,10 @@ typedef double algorithmFPType; /* Algorithm floating-point type */
 
 /*
  * Class:     org_apache_spark_ml_feature_PCADALImpl
- * Method:    cPCADALCorrelation
- * Signature: (JIIILcom/intel/daal/algorithms/PCAResult;)J
+ * Method:    cPCATrainDAL
+ * Signature: (JIIILorg/apache/spark/ml/feature/PCAResult;)J
  */
-JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_feature_PCADALImpl_cPCADALCorrelation(
+JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_feature_PCADALImpl_cPCATrainDAL(
     JNIEnv *env, jobject obj, jlong pNumTabData, jint k, jint executor_num, jint executor_cores,
     jobject resultObj) {
   size_t rankId;
@@ -31,8 +31,8 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_feature_PCADALImpl_cPCADALCorre
   const int comm_size = executor_num;
 
   NumericTablePtr pData = *((NumericTablePtr*)pNumTabData);
-
-  cout << pData->isNormalized(daal::data_management::interface1::NumericTableIface::NormalizationType::nonNormalized) << endl;
+  // Source data already normalized
+  pData->setNormalizationFlag(NumericTableIface::standardScoreNormalized);
 
   // Set number of threads for oneDAL to use for each rank
   services::Environment::getInstance()->setNumberOfThreads(executor_cores);
@@ -42,7 +42,7 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_feature_PCADALImpl_cPCADALCorre
 
   /* Create an algorithm for principal component analysis using the correlation method on
    * local nodes */
-  pca::Distributed<step1Local, algorithmFPType> localAlgorithm;
+  pca::Distributed<step1Local, algorithmFPType, pca::svdDense> localAlgorithm;
 
   /* Set the input data set to the algorithm */
   localAlgorithm.input.set(pca::data, pData);
@@ -89,17 +89,17 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_feature_PCADALImpl_cPCADALCorre
 
     /* Create an algorithm for principal component analysis using the correlation method
      * on the master node */
-    pca::Distributed<step2Master, algorithmFPType> masterAlgorithm;
+    pca::Distributed<step2Master, algorithmFPType, pca::svdDense> masterAlgorithm;
 
     for (size_t i = 0; i < nBlocks; i++) {
       /* Deserialize partial results from step 1 */
       OutputDataArchive dataArch(serializedData.get() + perNodeArchLength * i,
                                  perNodeArchLength);
 
-      services::SharedPtr<pca::PartialResult<pca::correlationDense> >
+      services::SharedPtr<pca::PartialResult<pca::svdDense> >
           dataForStep2FromStep1 =
-              services::SharedPtr<pca::PartialResult<pca::correlationDense> >(
-                  new pca::PartialResult<pca::correlationDense>());
+              services::SharedPtr<pca::PartialResult<pca::svdDense> >(
+                  new pca::PartialResult<pca::svdDense>());
       dataForStep2FromStep1->deserialize(dataArch);
 
       /* Set local partial results as input for the master-node algorithm */

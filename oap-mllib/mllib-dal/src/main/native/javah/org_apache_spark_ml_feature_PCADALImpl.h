@@ -9,10 +9,10 @@ extern "C" {
 #endif
 /*
  * Class:     org_apache_spark_ml_feature_PCADALImpl
- * Method:    cPCADALCorrelation
- * Signature: (JIIILcom/intel/daal/algorithms/PCAResult;)J
+ * Method:    cPCATrainDAL
+ * Signature: (JIIILorg/apache/spark/ml/feature/PCAResult;)J
  */
-JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_feature_PCADALImpl_cPCADALCorrelation
+JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_feature_PCADALImpl_cPCATrainDAL
   (JNIEnv *, jobject, jlong, jint, jint, jint, jobject);
 
 #ifdef __cplusplus
