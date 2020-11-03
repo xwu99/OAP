@@ -17,11 +17,9 @@
 
 package org.apache.spark.ml.feature
 
-import java.nio.DoubleBuffer
 import java.util.Arrays
 
-import com.intel.daal.algorithms.PCAResult
-import com.intel.daal.data_management.data.{HomogenNumericTable, NumericTable, Matrix => DALMatrix}
+import com.intel.daal.data_management.data.{HomogenNumericTable, NumericTable}
 import org.apache.spark.ml.linalg._
 import org.apache.spark.ml.util.{OneCCL, OneDAL, Utils}
 import org.apache.spark.mllib.feature.{PCAModel => MLlibPCAModel}
@@ -66,7 +64,7 @@ class PCADALImpl (
         Iterator.empty
       }
 
-//      OneCCL.cleanup()
+      OneCCL.cleanup()
 
       ret
     }.collect()

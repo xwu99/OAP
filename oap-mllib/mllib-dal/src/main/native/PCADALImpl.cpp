@@ -32,6 +32,8 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_feature_PCADALImpl_cPCADALCorre
 
   NumericTablePtr pData = *((NumericTablePtr*)pNumTabData);
 
+  cout << pData->isNormalized(daal::data_management::interface1::NumericTableIface::NormalizationType::nonNormalized) << endl;
+
   // Set number of threads for oneDAL to use for each rank
   services::Environment::getInstance()->setNumberOfThreads(executor_cores);
 

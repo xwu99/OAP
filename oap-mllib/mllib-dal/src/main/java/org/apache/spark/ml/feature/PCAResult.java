@@ -1,7 +1,4 @@
-package com.intel.daal.algorithms;
-
-import org.apache.spark.ml.linalg.DenseMatrix;
-import org.apache.spark.ml.linalg.DenseVector;
+package org.apache.spark.ml.feature;
 
 public class PCAResult {
     public long pcNumericTable;
