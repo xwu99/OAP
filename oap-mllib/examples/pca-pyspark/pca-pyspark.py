@@ -32,14 +32,14 @@ if __name__ == "__main__":
         sys.exit(1)    
 
     input = spark.read.load(sys.argv[1], format="csv", inferSchema="true", header="false")
-    K = int(sys.argv[2])
-
-    # Remove last nll column
+    K = int(sys.argv[2])    
+        
     assembler = VectorAssembler(
-        inputCols=input.columns[:-1],
+        inputCols=input.columns,
         outputCol="features")
 
-    dataset = assembler.transform(input)    
+    dataset = assembler.transform(input)   
+    dataset.show() 
 
     pca = PCA(k=K, inputCol="features", outputCol="pcaFeatures")
     model = pca.fit(dataset)
