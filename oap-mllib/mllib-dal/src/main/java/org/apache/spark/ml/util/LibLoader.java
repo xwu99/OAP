@@ -68,6 +68,10 @@ public final class LibLoader {
      */
     public static synchronized void loadLibMLlibDAL() throws IOException {
         LibUtils.loadLibrary();
+        // oneDAL Java API doesn't load correct libtbb version for oneAPI Beta 10, explicitly load this
+        // https://github.com/oneapi-src/oneDAL/issues/1254
+        loadFromJar(subDir, "libtbb.so.12.1");
+        
         loadFromJar(subDir, "libMLlibDAL.so");
     }
 
