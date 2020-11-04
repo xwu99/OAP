@@ -78,7 +78,7 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_feature_PCADALImpl_cPCATrainDAL
   ccl_wait(request);
 
   auto t2 = std::chrono::high_resolution_clock::now();
-  
+
   auto duration = std::chrono::duration_cast<std::chrono::seconds>( t2 - t1 ).count();
   std::cout << "PCA (native): ccl_allgatherv took " << duration << " secs" << std::endl;
 

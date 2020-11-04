@@ -21,7 +21,7 @@ export OAP_MLLIB_ROOT=/home/xiaochang/Works/OAP-xwu99-pca/oap-mllib
 #  Turn off filename expanding
 set -f
 # DATA_FILE=data/pca_normalized_'['1-4']'.csv
-DATA_FILE=data/svd.csv
+DATA_FILE=data/pca_data.csv
 
 # == User to customize Spark executor cores and memory == #
 
@@ -59,7 +59,7 @@ SPARK_DRIVER_CLASSPATH=$OAP_MLLIB_JAR
 SPARK_EXECUTOR_CLASSPATH=./$OAP_MLLIB_JAR_NAME
 
 APP_PY=pca-pyspark.py
-K=5
+K=3
 
 /usr/bin/time -p $SPARK_HOME/bin/spark-submit --master $SPARK_MASTER -v \
     --num-executors $SPARK_NUM_EXECUTORS \
