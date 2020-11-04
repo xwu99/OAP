@@ -52,7 +52,7 @@ class PCADALImpl (
       val tableArr = table.next()
       OneCCL.init(executorNum, executorIPAddress, OneCCL.KVS_PORT)
 
-      var result = new PCAResult()
+      val result = new PCAResult()
       cPCATrainDAL(
         tableArr,
         k,
@@ -97,8 +97,6 @@ class PCADALImpl (
     val data = table.asInstanceOf[HomogenNumericTable].getDoubleArray()
 
     val numRows = table.getNumberOfRows.toInt
-
-    println(k, numRows)
 
     require(k <= numRows, "k should be less or equal to row number")
 

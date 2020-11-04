@@ -19,79 +19,70 @@ package org.apache.spark.ml.feature
 
 import org.apache.spark.ml.linalg._
 import org.apache.spark.ml.param.ParamsSuite
-import org.apache.spark.ml.util.{DefaultReadWriteTest, MLTest, MLTestingUtils}
 import org.apache.spark.ml.util.TestingUtils._
-import org.apache.spark.mllib.linalg.{Vectors => OldVectors}
+import org.apache.spark.ml.util.{DefaultReadWriteTest, MLTest, MLTestingUtils}
 import org.apache.spark.mllib.linalg.distributed.RowMatrix
+import org.apache.spark.mllib.linalg.{Vectors => OldVectors}
 import org.apache.spark.sql.Row
 
 class IntelPCASuite extends MLTest with DefaultReadWriteTest {
 
   import testImplicits._
 
-//  test("params") {
-//    ParamsSuite.checkParams(new PCA)
-//    val mat = Matrices.dense(2, 2, Array(0.0, 1.0, 2.0, 3.0)).asInstanceOf[DenseMatrix]
-//    val explainedVariance = Vectors.dense(0.5, 0.5).asInstanceOf[DenseVector]
-//    val model = new PCAModel("pca", mat, explainedVariance)
-//    ParamsSuite.checkParams(model)
-//  }
-
-  test("pca") {
-    val data = Array(
-      Vectors.sparse(5, Seq((1, 1.0), (3, 7.0))),
-      Vectors.dense(2.0, 0.0, 3.0, 4.0, 5.0),
-      Vectors.dense(4.0, 0.0, 0.0, 6.0, 7.0)
-    )
-
-    val dataRDD = sc.parallelize(data, 2)
-
-    val mat = new RowMatrix(dataRDD.map(OldVectors.fromML))
-//    val pc = mat.computePrincipalComponents(3)
-
-    val (pc, variance) = mat.computePrincipalComponentsAndExplainedVariance(3)
-
-    println("ML Principal Components: ", pc)
-    println("ML Explained Variance: ", variance)
-
-    val expected = mat.multiply(pc).rows.map(_.asML)
-
-    val df = dataRDD.zip(expected).toDF("features", "expected")
-
-    val pca = new PCA()
-      .setInputCol("features")
-      .setOutputCol("pca_features")
-      .setK(3)
-
-    val pcaModel = pca.fit(df)
-
-    println("Principal Components: ", pcaModel.pc)
-    println("Explained Variance: ", pcaModel.explainedVariance)
-
-    //    val transformed = pcaModel.transform(df)
-//    checkVectorSizeOnDF(transformed, "pca_features", pcaModel.getK)
-//
-//    MLTestingUtils.checkCopyAndUids(pca, pcaModel)
-//    testTransformer[(Vector, Vector)](df, pcaModel, "pca_features", "expected") {
-//      case Row(result: Vector, expected: Vector) =>
-//        assert(result ~== expected absTol 1e-5,
-//          "Transformed vector is different with expected vector.")
-//    }
+  test("params") {
+    ParamsSuite.checkParams(new PCA)
+    val mat = Matrices.dense(2, 2, Array(0.0, 1.0, 2.0, 3.0)).asInstanceOf[DenseMatrix]
+    val explainedVariance = Vectors.dense(0.5, 0.5).asInstanceOf[DenseVector]
+    val model = new PCAModel("pca", mat, explainedVariance)
+    ParamsSuite.checkParams(model)
   }
 
-//  test("PCA read/write") {
-//    val t = new PCA()
-//      .setInputCol("myInputCol")
-//      .setOutputCol("myOutputCol")
-//      .setK(3)
-//    testDefaultReadWrite(t)
-//  }
+  // test("pca") {
+  //   val data = Array(
+  //     Vectors.sparse(5, Seq((1, 1.0), (3, 7.0))),
+  //     Vectors.dense(2.0, 0.0, 3.0, 4.0, 5.0),
+  //     Vectors.dense(4.0, 0.0, 0.0, 6.0, 7.0)
+  //   )
 
-//  test("PCAModel read/write") {
-//    val instance = new PCAModel("myPCAModel",
-//      Matrices.dense(2, 2, Array(0.0, 1.0, 2.0, 3.0)).asInstanceOf[DenseMatrix],
-//      Vectors.dense(0.5, 0.5).asInstanceOf[DenseVector])
-//    val newInstance = testDefaultReadWrite(instance)
-//    assert(newInstance.pc === instance.pc)
-//  }
+  //   val dataRDD = sc.parallelize(data, 2)
+
+  //   val mat = new RowMatrix(dataRDD.map(OldVectors.fromML))
+  //   val pc = mat.computePrincipalComponents(3)
+  //   val expected = mat.multiply(pc).rows.map(_.asML)
+
+  //   val df = dataRDD.zip(expected).toDF("features", "expected")
+
+  //   val pca = new PCA()
+  //     .setInputCol("features")
+  //     .setOutputCol("pca_features")
+  //     .setK(3)
+
+  //   val pcaModel = pca.fit(df)
+
+  //   val transformed = pcaModel.transform(df)
+  //   checkVectorSizeOnDF(transformed, "pca_features", pcaModel.getK)
+
+  //   MLTestingUtils.checkCopyAndUids(pca, pcaModel)
+  //   testTransformer[(Vector, Vector)](df, pcaModel, "pca_features", "expected") {
+  //     case Row(result: Vector, expected: Vector) =>
+  //       assert(result ~== expected absTol 1e-5,
+  //         "Transformed vector is different with expected vector.")
+  //   }
+  // }
+
+  // test("PCA read/write") {
+  //   val t = new PCA()
+  //     .setInputCol("myInputCol")
+  //     .setOutputCol("myOutputCol")
+  //     .setK(3)
+  //   testDefaultReadWrite(t)
+  // }
+
+  // test("PCAModel read/write") {
+  //   val instance = new PCAModel("myPCAModel",
+  //     Matrices.dense(2, 2, Array(0.0, 1.0, 2.0, 3.0)).asInstanceOf[DenseMatrix],
+  //     Vectors.dense(0.5, 0.5).asInstanceOf[DenseVector])
+  //   val newInstance = testDefaultReadWrite(instance)
+  //   assert(newInstance.pc === instance.pc)
+  // }
 }

@@ -68,17 +68,17 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_feature_PCADALImpl_cPCATrainDAL
 
   cout << "PCA (native): ccl_allgatherv receiving " << perNodeArchLength * nBlocks << " bytes" << endl;
 
+  auto t1 = std::chrono::high_resolution_clock::now();
+
   /* Transfer partial results to step 2 on the root node */
   // MPI_Gather(nodeResults, perNodeArchLength, MPI_CHAR, serializedData.get(),
   // perNodeArchLength, MPI_CHAR, ccl_root, MPI_COMM_WORLD);
-
-  auto t1 = std::chrono::high_resolution_clock::now();
-
   ccl_allgatherv(nodeResults, perNodeArchLength, serializedData.get(), recv_counts,
                  ccl_dtype_char, NULL, NULL, NULL, &request);
   ccl_wait(request);
 
   auto t2 = std::chrono::high_resolution_clock::now();
+  
   auto duration = std::chrono::duration_cast<std::chrono::seconds>( t2 - t1 ).count();
   std::cout << "PCA (native): ccl_allgatherv took " << duration << " secs" << std::endl;
 
@@ -87,7 +87,7 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_feature_PCADALImpl_cPCATrainDAL
   if (rankId == ccl_root) {
     auto t1 = std::chrono::high_resolution_clock::now();        
 
-    /* Create an algorithm for principal component analysis using the correlation method
+    /* Create an algorithm for principal component analysis using the svdDense method
      * on the master node */
     pca::Distributed<step2Master, algorithmFPType, pca::svdDense> masterAlgorithm;
 
@@ -121,7 +121,8 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_feature_PCADALImpl_cPCATrainDAL
     printNumericTable(result->get(pca::eigenvalues), "Eigenvalues:");
     printNumericTable(result->get(pca::eigenvectors), "Eigenvectors:");
 
-    // Todo: return top K principle components
+    // Return all eigenvalues & eigenvectors
+
     // Get the class of the input object
     jclass clazz = env->GetObjectClass(resultObj);
     // Get Field references
