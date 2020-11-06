@@ -233,9 +233,10 @@
                         </resource>
                         <resource>
                             <!-- For https://github.com/oneapi-src/oneDAL/issues/1254 -->
-                            <directory>${TBBROOT}/lib/intel64/gcc4.8</directory>
+                            <directory>${env.TBBROOT}/lib/intel64/gcc4.8</directory>
                             <includes>
                                 <include>libtbb.so.12.1</include>
+                                <include>libtbbmalloc.so.2.1</include>
                             </includes>
                         </resource>
                         <resource>
@@ -259,8 +260,22 @@
                             <goal>rename</goal>
                         </goals>
                         <configuration>
-                            <sourceFile>${project.build.testOutputDirectory}/lib/libccl_atl_ofi.so.1</sourceFile>
-                            <destinationFile>${project.build.testOutputDirectory}/lib/libccl_atl_ofi.so</destinationFile>
+                            <fileSets>
+                                <!-- oneDAL Java API doesn't load correct libtbb version for oneAPI Beta 10,
+                                rename to workaround. See https://github.com/oneapi-src/oneDAL/issues/1254 -->
+                                <fileSet>
+                                    <sourceFile>${project.build.testOutputDirectory}/lib/libtbb.so.12.1</sourceFile>
+                                    <destinationFile>${project.build.testOutputDirectory}/lib/libtbb.so.2</destinationFile>
+                                </fileSet>
+                                <fileSet>
+                                    <sourceFile>${project.build.testOutputDirectory}/lib/libtbbmalloc.so.2.1</sourceFile>
+                                    <destinationFile>${project.build.testOutputDirectory}/lib/libtbbmalloc.so.2</destinationFile>
+                                </fileSet>
+                                <fileSet>
+                                    <sourceFile>${project.build.testOutputDirectory}/lib/libccl_atl_ofi.so.1</sourceFile>
+                                    <destinationFile>${project.build.testOutputDirectory}/lib/libccl_atl_ofi.so</destinationFile>
+                                </fileSet>
+                            </fileSets>
                         </configuration>
                     </execution>
                 </executions>
