@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 # == User to customize the following environments ======= #
+
 # Set user Spark and Hadoop home directory
 export SPARK_HOME=/path/to/your/spark/home
 export HADOOP_HOME=/path/to/your/hadoop/home

@@ -3,11 +3,12 @@
 # == User to customize the following environments ======= #
 
 # Set user Spark and Hadoop home directory
-#export SPARK_HOME=/path/to/your/spark/home
-#export HADOOP_HOME=/path/to/your/hadoop/home
+export SPARK_HOME=/path/to/your/spark/home
+export HADOOP_HOME=/path/to/your/hadoop/home
 # Set user HDFS Root
-export HDFS_ROOT=hdfs://localhost:8020
-export OAP_MLLIB_ROOT=/home/xiaochang/Works/OAP-xwu99-pca/oap-mllib
+export HDFS_ROOT=hdfs://your_hostname:8020
+# Set user Intel MLlib Root directory
+export OAP_MLLIB_ROOT=/path/to/your/OAP/oap-mllib
 
 # == User to customize Spark executor cores and memory == #
 
