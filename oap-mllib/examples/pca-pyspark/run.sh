@@ -1,26 +1,15 @@
 #!/usr/bin/env bash
 
 # == User to customize the following environments ======= #
-
 # Set user Spark and Hadoop home directory
-#export SPARK_HOME=/path/to/your/spark/home
-#export HADOOP_HOME=/path/to/your/hadoop/home
+export SPARK_HOME=/path/to/your/spark/home
+export HADOOP_HOME=/path/to/your/hadoop/home
 # Set user HDFS Root
-export HDFS_ROOT=hdfs://localhost:8020
+export HDFS_ROOT=hdfs://your_hostname:8020
 # Set user Intel MLlib Root directory
-export OAP_MLLIB_ROOT=/home/xiaochang/Works/OAP-xwu99-pca/oap-mllib
-# Set IP and Port for oneCCL KVS, you can select any one of the worker nodes and set CCL_KVS_IP_PORT to its IP and Port
-# IP can be got with `hostname -I`, if multiple IPs are returned, the first IP should be used. Port can be any available port.
-# For example, if one of the worker IP is 192.168.0.1 and an available port is 51234. 
-# CCL_KVS_IP_PORT can be set in the format of 192.168.0.1_51234
-# Incorrectly setting this value will result in hanging when oneCCL initialize
-#export CCL_KVS_IP_PORT=10.0.2.149_51234
+export OAP_MLLIB_ROOT=/path/to/your/OAP/oap-mllib
 
-# Data file is from Spark Examples (data/mllib/sample_kmeans_data.txt), the data file should be copied to HDFS
-
-#  Turn off filename expanding
-set -f
-# DATA_FILE=data/pca_normalized_'['1-4']'.csv
+# CSV data is the same as in Spark example "ml/pca_example.py", the data file should be copied to HDFS
 DATA_FILE=data/pca_data.csv
 
 # == User to customize Spark executor cores and memory == #

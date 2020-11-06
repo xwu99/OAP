@@ -47,7 +47,4 @@ if __name__ == "__main__":
     print("Principal Components: ", model.pc, sep='\n')
     print("Explained Variance: ", model.explainedVariance, sep='\n')
 
-    # result = model.transform(df).select("pcaFeatures")
-    # result.show(truncate=False)
-
     spark.stop()
