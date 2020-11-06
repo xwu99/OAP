@@ -40,8 +40,6 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_feature_PCADALImpl_cPCATrainDAL
   int nThreadsNew = services::Environment::getInstance()->getNumberOfThreads();
   cout << "oneDAL (native): Number of threads used: " << nThreadsNew << endl;
 
-  /* Create an algorithm for principal component analysis using the correlation method on
-   * local nodes */
   pca::Distributed<step1Local, algorithmFPType, pca::svdDense> localAlgorithm;
 
   /* Set the input data set to the algorithm */
