@@ -24,8 +24,12 @@ import com.intel.daal.services.DaalContext
 import org.apache.spark.ml.linalg.{DenseMatrix, DenseVector, Vector, Vectors}
 import org.apache.spark.mllib.linalg.{Vector => OldVector}
 import org.apache.spark.rdd.{ExecutorInProcessCoalescePartitioner, RDD}
+import java.util.logging.{Logger, Level}
 
 object OneDAL {
+
+  private val logger = Logger.getLogger("util.OneDAL")
+  private val logLevel = Level.INFO
 
   // Convert DAL numeric table to array of vectors
   def numericTableToVectors(table: NumericTable): Array[Vector] = {
@@ -98,8 +102,8 @@ object OneDAL {
       val matrix = new DALMatrix(context, classOf[java.lang.Double],
         numCols.toLong, numRows.toLong, NumericTable.AllocationFlag.DoAllocate)
 
-      println("IntelMLlib: Loading libMLlibDAL.so")
-      // oneDAL libs should be loaded by now, extract libMLlibDAL.so to temp file and load
+      // oneDAL libs should be loaded by now, loading other native libs
+      logger.log(logLevel, "IntelMLlib: Loading other native libraries ...")
       LibLoader.loadLibraries()
 
       var dalRow = 0
