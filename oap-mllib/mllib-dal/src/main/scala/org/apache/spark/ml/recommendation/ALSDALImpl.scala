@@ -18,17 +18,42 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
   seed: Long,
 ) extends Serializable with Logging {
 
+  // Return Map partitionId -> (ratingsNum, csrRowNum)
+  private def getRatingsPartitionInfo(data: RDD[Rating[ID]]): Map[Int, (Int, Int)] = {
+    val collectd = data.mapPartitionsWithIndex { case (index: Int, it: Iterator[Rating[ID]]) =>
+      var ratingsNum = 0
+      var s = Set[ID]()
+      it.foreach { v =>
+        s += v.user
+        ratingsNum += 1
+      }
+      Iterator((index, (ratingsNum, s.count(_ => true))))
+    }.collect
+
+    var ret = Map[Int, (Int, Int)]()
+    collectd.foreach { v =>
+      ret += (v._1 -> v._2)
+    }
+
+    ret
+  }
+
   private def ratingsToCSRNumericTables(ratings: RDD[Rating[ID]],
     nRatings: Long, nVectors: Long, nFeatures: Long): RDD[CSRNumericTable] = {
 
+    val ratingsPartitionInfo = getRatingsPartitionInfo(ratings)
+
     val rowSortedRatings = ratings.sortBy(_.user.toString.toLong)
 
-    println("ratingsToCSRNumericTables", nRatings, nVectors, nFeatures)
+//    println("ratingsToCSRNumericTables", nRatings, nVectors, nFeatures)
 
-    rowSortedRatings.mapPartitions { partition =>
-      val values = Array.fill(nRatings.toInt) { 0.0f }
-      val columnIndices = Array.fill(nRatings.toInt) { 0L }
-      val rowOffsets = Array.fill(nVectors.toInt+1) { 0L }
+    // need to modify each index substract previous index
+    rowSortedRatings.mapPartitionsWithIndex { case (partitionId, partition) =>
+      val ratingsNum = ratingsPartitionInfo(partitionId)._1
+      val csrRowNum = ratingsPartitionInfo(partitionId)._2
+      val values = Array.fill(ratingsNum) { 0.0f }
+      val columnIndices = Array.fill(ratingsNum) { 0L }
+      val rowOffsets = Array.fill(csrRowNum) { 0L }
 
       var index = 0
       var curRow = 0
@@ -56,9 +81,9 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
       println("values", values.mkString(","))
 
       val contextLocal = new DaalContext()
-      val table = new CSRNumericTable(contextLocal, values, columnIndices, rowOffsets, nFeatures, nVectors)
+      val table = new CSRNumericTable(contextLocal, values, columnIndices, rowOffsets, nFeatures, csrRowNum)
 
-//      Service.printNumericTable("Input", table)
+      Service.printNumericTable("Input", table)
 
       Iterator(table)
     }
