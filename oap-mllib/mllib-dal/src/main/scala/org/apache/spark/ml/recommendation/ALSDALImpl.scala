@@ -1,13 +1,18 @@
 package org.apache.spark.ml.recommendation
 
-import org.apache.spark.rdd.RDD
+import java.nio.DoubleBuffer
+
+import com.intel.daal.data_management.data.CSRNumericTable.Indexing
+import org.apache.spark.rdd.{ExecutorInProcessCoalescePartitioner, RDD}
 
 import scala.reflect.ClassTag
-import com.intel.daal.data_management.data.{CSRNumericTable, HomogenNumericTable, Matrix => DALMatrix}
+import com.intel.daal.data_management.data.{CSRNumericTable, HomogenNumericTable, RowMergedNumericTable, Matrix => DALMatrix}
 import com.intel.daal.services.DaalContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.ml.recommendation.ALS.Rating
-import org.apache.spark.ml.util.{Service, Utils}
+import org.apache.spark.ml.util.{OneCCL, OneDAL, Service, Utils}
+
+import scala.collection.mutable.ArrayBuffer
 
 class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
   data: RDD[Rating[ID]],
@@ -18,8 +23,8 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
   seed: Long,
 ) extends Serializable with Logging {
 
-  // Return Map partitionId -> (ratingsNum, csrRowNum)
-  private def getRatingsPartitionInfo(data: RDD[Rating[ID]]): Map[Int, (Int, Int)] = {
+  // Return Map partitionId -> (ratingsNum, csrRowNum, rowOffset)
+  private def getRatingsPartitionInfo(data: RDD[Rating[ID]]): Map[Int, (Int, Int, Int)] = {
     val collectd = data.mapPartitionsWithIndex { case (index: Int, it: Iterator[Rating[ID]]) =>
       var ratingsNum = 0
       var s = Set[ID]()
@@ -30,9 +35,14 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
       Iterator((index, (ratingsNum, s.count(_ => true))))
     }.collect
 
-    var ret = Map[Int, (Int, Int)]()
+    var ret = Map[Int, (Int, Int, Int)]()
+    var rowOffset = 0
     collectd.foreach { v =>
-      ret += (v._1 -> v._2)
+      val partitionId = v._1
+      val ratingsNum = v._2._1
+      val csrRowNum = v._2._2
+      ret += ( partitionId -> (ratingsNum, csrRowNum, rowOffset))
+      rowOffset = rowOffset + csrRowNum
     }
 
     ret
@@ -41,52 +51,64 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
   private def ratingsToCSRNumericTables(ratings: RDD[Rating[ID]],
     nRatings: Long, nVectors: Long, nFeatures: Long): RDD[CSRNumericTable] = {
 
-    val ratingsPartitionInfo = getRatingsPartitionInfo(ratings)
-
     val rowSortedRatings = ratings.sortBy(_.user.toString.toLong)
+    val ratingsPartitionInfo = getRatingsPartitionInfo(rowSortedRatings)
 
-//    println("ratingsToCSRNumericTables", nRatings, nVectors, nFeatures)
-
-    // need to modify each index substract previous index
     rowSortedRatings.mapPartitionsWithIndex { case (partitionId, partition) =>
       val ratingsNum = ratingsPartitionInfo(partitionId)._1
       val csrRowNum = ratingsPartitionInfo(partitionId)._2
       val values = Array.fill(ratingsNum) { 0.0f }
       val columnIndices = Array.fill(ratingsNum) { 0L }
-      val rowOffsets = Array.fill(csrRowNum) { 0L }
+      val rowOffsets = ArrayBuffer[Long](1L)
 
       var index = 0
-      var curRow = 0
+      var curRow = 0L
       // Each partition converted to one CSRNumericTable
       partition.foreach { p =>
-        val row = p.user.toString.toLong
+        // Modify row index for each partition (start from 0)
+        val row = p.user.toString.toLong - ratingsPartitionInfo(partitionId)._3
         val column = p.item.toString.toLong
         val rating = p.rating
 
         values(index) = rating
-        columnIndices(index) = column
+        // one-based index
+        columnIndices(index) = column + 1
 
-        if (row > rowOffsets(curRow)) {
-          curRow = curRow + 1
-          rowOffsets(curRow) = index
+        if (row > curRow) {
+          curRow = row
+          // one-based index
+          rowOffsets += index + 1
         }
 
         index = index + 1
       }
-      curRow = curRow + 1
-      rowOffsets(curRow) = index
+      // one-based row index
+      rowOffsets += index+1
 
       println("rowOffsets", rowOffsets.mkString(","))
       println("columnIndices", columnIndices.mkString(","))
       println("values", values.mkString(","))
 
       val contextLocal = new DaalContext()
-      val table = new CSRNumericTable(contextLocal, values, columnIndices, rowOffsets, nFeatures, csrRowNum)
+      val table = new CSRNumericTable(
+        contextLocal, values, columnIndices, rowOffsets.toArray, nFeatures, csrRowNum,
+        )
 
-      Service.printNumericTable("Input", table)
+      Service.printNumericTable("Input", table, 10)
 
       Iterator(table)
     }
+  }
+
+  def factorsToRDD(cUsersFactorsNumTab: Long, cItemsFactorsNumTab: Long)
+    :(RDD[(ID, Array[Float])], RDD[(ID, Array[Float])]) = {
+    val usersFactorsNumTab = OneDAL.makeNumericTable(cUsersFactorsNumTab)
+    val itemsFactorsNumTab = OneDAL.makeNumericTable(cItemsFactorsNumTab)
+
+    Service.printNumericTable("usersFactorsNumTab", usersFactorsNumTab)
+    Service.printNumericTable("itemsFactorsNumTab", itemsFactorsNumTab)
+
+    null
   }
 
   def run(): (RDD[(ID, Array[Float])], RDD[(ID, Array[Float])]) = {
@@ -113,7 +135,75 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
     val numericTables = ratingsToCSRNumericTables(dataForConversion, nRatings, nVectors, nFeatures)
     numericTables.count()
 
-    null
+    val coalescedRdd = numericTables.coalesce(1,
+      partitionCoalescer = Some(new ExecutorInProcessCoalescePartitioner()))
+
+    val coalescedTables = coalescedRdd.mapPartitions { iter =>
+      val context = new DaalContext()
+      val mergedData = new RowMergedNumericTable(context)
+
+      iter.foreach{ curIter =>
+        OneDAL.cAddNumericTable(mergedData.getCNumericTable, curIter.getCNumericTable)
+      }
+      Iterator(mergedData.getCNumericTable)
+
+    }.cache()
+
+    val results = coalescedTables.mapPartitions { tableIter =>
+      val tableArr = tableIter.next()
+      OneCCL.init(executorNum, executorIPAddress, OneCCL.KVS_PORT)
+      val result = new ALSResult()
+      cDALImplictALS(
+        tableArr, nUsers = 0,
+        rank, maxIter, regParam, alpha,
+        executorNum,
+        executorCores,
+        result
+      )
+      Iterator(result)
+    }
+
+    val usersFactorsRDD = results.mapPartitionsWithIndex { (index: Int, partiton: Iterator[ALSResult]) =>
+      val ret = partiton.flatMap { p =>
+        val usersFactorsNumTab = OneDAL.makeNumericTable(p.cUsersFactorsNumTab)
+        val nRows = usersFactorsNumTab.getNumberOfRows.toInt
+        val nCols = usersFactorsNumTab.getNumberOfColumns.toInt
+        val buffer = DoubleBuffer.allocate(nCols * nRows)
+
+        usersFactorsNumTab.getBlockOfRows(0, nRows, buffer)
+        (0 to nRows).map { index =>
+          val array = Array.fill(nCols){0.0}
+          buffer.get(array, index*nCols, nCols)
+          (index.asInstanceOf[ID], array.map(_.toFloat).toArray)
+        }.toIterator
+      }
+      ret
+    }
+
+    val itemsFactorsRDD = results.mapPartitionsWithIndex { (index: Int, partiton: Iterator[ALSResult]) =>
+      val ret = partiton.flatMap { p =>
+        val itemsFactorsNumTab = OneDAL.makeNumericTable(p.cItemsFactorsNumTab)
+        val nRows = itemsFactorsNumTab.getNumberOfRows.toInt
+        val nCols = itemsFactorsNumTab.getNumberOfColumns.toInt
+        val buffer = DoubleBuffer.allocate(nCols * nRows)
+
+        itemsFactorsNumTab.getBlockOfRows(0, nRows, buffer)
+        (0 to nRows).map { index =>
+          val array = Array.fill(nCols){0.0}
+          buffer.get(array, index*nCols, nCols)
+          (index.asInstanceOf[ID], array.map(_.toFloat).toArray)
+        }.toIterator
+      }
+      ret
+    }
+    println("usersFactorsRDD")
+    usersFactorsRDD.collect().foreach(println)
+    println("itemsFactorsRDD")
+    itemsFactorsRDD.collect().foreach(println)
+
+    (usersFactorsRDD, itemsFactorsRDD)
+    //factorsToRDD(results(0).cUsersFactorsNumTab, results(0).cItemsFactorsNumTab)
+//    null
   }
 
   // Single entry to call Implict ALS DAL backend

@@ -29,6 +29,7 @@ KeyValueDataCollectionPtr itemStep3LocalInput;
 training::DistributedPartialResultStep4Ptr itemsPartialResultLocal;
 training::DistributedPartialResultStep4Ptr usersPartialResultLocal;
 std::vector<training::DistributedPartialResultStep4Ptr> itemsPartialResultsMaster;
+std::vector<training::DistributedPartialResultStep4Ptr> usersPartialResultsMaster;
 
 template <typename T>
 void gather(size_t rankId, int nBlocks, const ByteBuffer & nodeResults,  T * result)
@@ -80,6 +81,50 @@ void gather(size_t rankId, int nBlocks, const ByteBuffer & nodeResults,  T * res
         }
     }
     
+}
+
+void gatherUsers(const ByteBuffer & nodeResults, int nBlocks)
+{
+    size_t perNodeArchLengthMaster[nBlocks];
+    size_t perNodeArchLength = nodeResults.size();
+    ByteBuffer serializedData;
+    size_t recv_counts[nBlocks];
+    for (int i = 0; i < nBlocks; i++) {
+        recv_counts[i] = sizeof(size_t);
+    }
+
+    ccl_request_t request;
+    // MPI_Allgather(&perNodeArchLength, sizeof(int), MPI_CHAR, perNodeArchLengthMaster, sizeof(int), MPI_CHAR, MPI_COMM_WORLD);
+    ccl_allgatherv(&perNodeArchLength, sizeof(size_t), perNodeArchLengthMaster, recv_counts, ccl_dtype_char, NULL, NULL, NULL, &request);
+    ccl_wait(request);
+
+    size_t memoryBuf = 0;
+    for (int i = 0; i < nBlocks; i++)
+    {
+        memoryBuf += perNodeArchLengthMaster[i];
+    }
+    serializedData.resize(memoryBuf);
+
+    size_t shift = 0;
+    std::vector<int> displs(nBlocks);
+    for (int i = 0; i < nBlocks; i++)
+    {
+        displs[i] = shift;
+        shift += perNodeArchLengthMaster[i];
+    }
+
+    /* Transfer partial results to step 2 on the root node */
+    // MPI_Allgatherv(&nodeResults[0], perNodeArchLength, MPI_CHAR, &serializedData[0], perNodeArchLengthMaster, displs, MPI_CHAR, MPI_COMM_WORLD);
+    ccl_allgatherv(&nodeResults[0], perNodeArchLength, &serializedData[0], perNodeArchLengthMaster, ccl_dtype_char, NULL, NULL, NULL, &request);
+    ccl_wait(request);
+
+    usersPartialResultsMaster.resize(nBlocks);
+    for (int i = 0; i < nBlocks; i++)
+    {
+        /* Deserialize partial results from step 4 */
+        usersPartialResultsMaster[i] =
+            training::DistributedPartialResultStep4::cast(deserializeDAALObject(&serializedData[0] + displs[i], perNodeArchLengthMaster[i]));
+    }
 }
 
 void gatherItems(const ByteBuffer & nodeResults, int nBlocks)
@@ -334,6 +379,9 @@ void trainModel(size_t rankId, size_t nBlocks, size_t nFactors, size_t maxIterat
     {
         auto t1 = std::chrono::high_resolution_clock::now();
 
+        //
+        // Update partial users factors
+        //
         step1LocalResult = computeStep1Local(itemsPartialResultLocal, nFactors);
 
         serializeDAALObject(step1LocalResult.get(), nodeResults);
@@ -375,11 +423,14 @@ void trainModel(size_t rankId, size_t nBlocks, size_t nFactors, size_t maxIterat
 
         usersPartialResultLocal = computeStep4Local(transposedDataTable, step2MasterResult, step4LocalInput, nFactors);
 
+        //
+        // Update partial items factors
+        //
         step1LocalResult = computeStep1Local(usersPartialResultLocal, nFactors);
 
         serializeDAALObject(step1LocalResult.get(), nodeResults);
 
-        /*Gathering step1LocalResult on the master*/
+        /* Gathering step1LocalResult on the master */
         gather(rankId, nBlocks, nodeResults, step1LocalResultsOnMaster);
 
         if (rankId == ccl_root)
@@ -421,13 +472,16 @@ void trainModel(size_t rankId, size_t nBlocks, size_t nFactors, size_t maxIterat
     }
 
     /*Gather all itemsPartialResultLocal to itemsPartialResultsMaster on the master and distributing the result over other ranks*/
-    serializeDAALObject(itemsPartialResultLocal.get(), nodeResults);
-    gatherItems(nodeResults, nBlocks);
+    // serializeDAALObject(itemsPartialResultLocal.get(), nodeResults);
+    // gatherItems(nodeResults, nBlocks);
+
+    // serializeDAALObject(usersPartialResultLocal.get(), nodeResults);
+    // gatherUsers(nodeResults, nBlocks);
 }
 
 JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_recommendation_ALSDALImpl_cDALImplictALS
   (JNIEnv *env, jobject obj, jlong data, jlong nUsers, jint nFactors, jint maxIter, jdouble regParam, jdouble alpha, 
-   jint executor_num, jint executor_cores, jobject result)
+   jint executor_num, jint executor_cores, jobject resultObj)
 {
     size_t rankId;
     ccl_get_comm_rank(NULL, &rankId);
@@ -441,7 +495,21 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_recommendation_ALSDALImpl_cDALI
 
     int nBlocks = executor_num;
     initializeModel(rankId, nBlocks, nUsers, nFactors);
-    trainModel(rankId, executor_num, nFactors, maxIter);    
+    trainModel(rankId, executor_num, nFactors, maxIter);
+
+    auto pUser = usersPartialResultLocal->get(training::outputOfStep4ForStep1)->getFactors();
+    // auto pUserIndices = usersPartialResultLocal->get(training::outputOfStep4ForStep1)->getIndices();
+    auto pItem = itemsPartialResultLocal->get(training::outputOfStep4ForStep1)->getFactors();
+    // auto pItemIndices = itemsPartialResultsMaster[i]->get(training::outputOfStep4ForStep1)->getIndices();
+
+    // Get the class of the input object
+    jclass clazz = env->GetObjectClass(resultObj);
+    // Get Field references
+    jfieldID cUsersFactorsNumTabField = env->GetFieldID(clazz, "cUsersFactorsNumTab", "J");
+    jfieldID cItemsFactorsNumTabField = env->GetFieldID(clazz, "cItemsFactorsNumTab", "J");
+    // Set factors as result
+    env->SetLongField(resultObj, cUsersFactorsNumTabField, pUser);
+    env->SetLongField(resultObj, cItemsFactorsNumTabField, pItem);
 
     return 0;
 }
