@@ -281,6 +281,10 @@ void initializeStep2Local(size_t rankId, const KeyValueDataCollectionPtr & initS
 
 void initializeModel(size_t rankId, size_t nBlocks, size_t nUsers, size_t nFactors)
 {
+    printf("initializeModel: rankId %ld, nBlocks %ld, nUsers %ld, nFactors %ld", 
+        rankId, nBlocks, nUsers, nFactors);
+    // std::cout << "initializeModel " << std::endl;
+
     KeyValueDataCollectionPtr initStep1LocalResult = initializeStep1Local(rankId, nBlocks, nUsers, nFactors);
 
     /* MPI_Alltoallv to populate initStep2LocalInput */
@@ -361,6 +365,8 @@ training::DistributedPartialResultStep4Ptr computeStep4Local(const CSRNumericTab
 
 void trainModel(size_t rankId, size_t nBlocks, size_t nFactors, size_t maxIterations)
 {
+    std::cout << "trainModel" << std::endl;
+
     training::DistributedPartialResultStep1Ptr step1LocalResultsOnMaster[nBlocks];
     training::DistributedPartialResultStep1Ptr step1LocalResult;
     NumericTablePtr step2MasterResult;
@@ -480,13 +486,13 @@ void trainModel(size_t rankId, size_t nBlocks, size_t nFactors, size_t maxIterat
 }
 
 JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_recommendation_ALSDALImpl_cDALImplictALS
-  (JNIEnv *env, jobject obj, jlong data, jlong nUsers, jint nFactors, jint maxIter, jdouble regParam, jdouble alpha, 
+  (JNIEnv *env, jobject obj, jlong numTableAddr, jlong nUsers, jint nFactors, jint maxIter, jdouble regParam, jdouble alpha,
    jint executor_num, jint executor_cores, jobject resultObj)
 {
     size_t rankId;
     ccl_get_comm_rank(NULL, &rankId);
 
-    NumericTablePtr pData = *((NumericTablePtr *)data);
+    dataTable = *((CSRNumericTablePtr *)numTableAddr);
 
     // Set number of threads for oneDAL to use for each rank
     services::Environment::getInstance()->setNumberOfThreads(executor_cores);

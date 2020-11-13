@@ -1,7 +1,5 @@
 package org.apache.spark.ml.recommendation
 
-import java.nio.DoubleBuffer
-
 import com.intel.daal.data_management.data.CSRNumericTable.Indexing
 import org.apache.spark.rdd.{ExecutorInProcessCoalescePartitioner, RDD}
 
@@ -10,9 +8,11 @@ import com.intel.daal.data_management.data.{CSRNumericTable, HomogenNumericTable
 import com.intel.daal.services.DaalContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.ml.recommendation.ALS.Rating
-import org.apache.spark.ml.util.{OneCCL, OneDAL, Service, Utils}
+import org.apache.spark.ml.util._
 
 import scala.collection.mutable.ArrayBuffer
+//import java.nio.DoubleBuffer
+import java.nio.DoubleBuffer
 
 class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
   data: RDD[Rating[ID]],
@@ -90,14 +90,18 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
       println("values", values.mkString(","))
 
       val contextLocal = new DaalContext()
-      val table = new CSRNumericTable(
-        contextLocal, values, columnIndices, rowOffsets.toArray, nFeatures, csrRowNum,
-        )
 
-      Service.printNumericTable("Input", table, 10)
+      println("ALSDALImpl: Loading native libraries ..." )
+      LibLoader.loadLibraries()
+
+      val cTable = OneDAL.cNewCSRNumericTable(values, columnIndices, rowOffsets.toArray, nFeatures, csrRowNum)
+      val table = new CSRNumericTable(contextLocal, cTable)
+//      table.pack()
+
+//      Service.printNumericTable("Input", table, 10)
 
       Iterator(table)
-    }
+    }.cache()
   }
 
   def factorsToRDD(cUsersFactorsNumTab: Long, cItemsFactorsNumTab: Long)
@@ -131,30 +135,58 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
     } else {
       data
     }
+//    println("data.getNumPartitions", data.getNumPartitions)
 
     val numericTables = ratingsToCSRNumericTables(dataForConversion, nRatings, nVectors, nFeatures)
-    numericTables.count()
-
-    val coalescedRdd = numericTables.coalesce(1,
-      partitionCoalescer = Some(new ExecutorInProcessCoalescePartitioner()))
-
-    val coalescedTables = coalescedRdd.mapPartitions { iter =>
+    val results = numericTables.mapPartitions { iter =>
+      val table = iter.next()
       val context = new DaalContext()
-      val mergedData = new RowMergedNumericTable(context)
+//      table.unpack(context)
 
-      iter.foreach{ curIter =>
-        OneDAL.cAddNumericTable(mergedData.getCNumericTable, curIter.getCNumericTable)
-      }
-      Iterator(mergedData.getCNumericTable)
+      Service.printNumericTable("Converted Input:", table, 10)
+//
+//    }
 
-    }.cache()
+//    numericTables.foreachPartition(() => _)
 
-    val results = coalescedTables.mapPartitions { tableIter =>
-      val tableArr = tableIter.next()
+//    val coalescedRdd = numericTables.coalesce(1,
+//      partitionCoalescer = Some(new ExecutorInProcessCoalescePartitioner()))
+//
+//    coalescedRdd.count()
+
+//    val coalescedTables = coalescedRdd.mapPartitions { iter =>
+//      val context = new DaalContext()
+//      val mergedData = new RowMergedNumericTable(context)
+//
+//      println("ALSDALImpl: Loading libMLlibDAL.so" )
+//      // oneDAL libs should be loaded by now, extract libMLlibDAL.so to temp file and load
+//      LibLoader.loadLibraries()
+//
+//      iter.foreach { curIter =>
+//        OneDAL.cAddNumericTable(mergedData.getCNumericTable, curIter.getCNumericTable)
+//      }
+//      Iterator(mergedData.getCNumericTable)
+//
+//    }.cache()
+
+//    val coalescedTables = numericTables
+//
+//    val results = coalescedTables.mapPartitions { tableIter =>
+//      val tableArr = tableIter.next()
+//
+//      val contextLocal = new DaalContext()
+//      tableArr.unpack(contextLocal)
+//
+      println("ALSDALImpl: Loading libMLlibDAL.so" )
+      LibLoader.loadLibraries()
+
       OneCCL.init(executorNum, executorIPAddress, OneCCL.KVS_PORT)
+
+      println("table.getCNumericTable", table.getCNumericTable)
+
       val result = new ALSResult()
       cDALImplictALS(
-        tableArr, nUsers = 0,
+        table.getCNumericTable, nUsers = 46,
         rank, maxIter, regParam, alpha,
         executorNum,
         executorCores,
@@ -202,7 +234,6 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
     itemsFactorsRDD.collect().foreach(println)
 
     (usersFactorsRDD, itemsFactorsRDD)
-    //factorsToRDD(results(0).cUsersFactorsNumTab, results(0).cItemsFactorsNumTab)
 //    null
   }
 
