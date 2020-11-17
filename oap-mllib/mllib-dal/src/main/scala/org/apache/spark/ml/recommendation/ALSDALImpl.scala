@@ -12,7 +12,7 @@ import org.apache.spark.ml.util._
 
 import scala.collection.mutable.ArrayBuffer
 //import java.nio.DoubleBuffer
-import java.nio.DoubleBuffer
+import java.nio.FloatBuffer
 
 class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
   data: RDD[Rating[ID]],
@@ -143,7 +143,7 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
       val context = new DaalContext()
 //      table.unpack(context)
 
-      Service.printNumericTable("Converted Input:", table, 10)
+//      Service.printNumericTable("Converted Input:", table, 10)
 //
 //    }
 
@@ -182,8 +182,6 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
 
       OneCCL.init(executorNum, executorIPAddress, OneCCL.KVS_PORT)
 
-      println("table.getCNumericTable", table.getCNumericTable)
-
       val result = new ALSResult()
       cDALImplictALS(
         table.getCNumericTable, nUsers = 46,
@@ -193,48 +191,69 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
         result
       )
       Iterator(result)
-    }
+    }.cache()
+
+//    results.foreach { p =>
+//      val usersFactorsNumTab = OneDAL.makeNumericTable(p.cUsersFactorsNumTab)
+//      println("foreach", p.cUsersFactorsNumTab, p.cItemsFactorsNumTab)
+////      Service.printNumericTable("usersFactorsNumTab", usersFactorsNumTab)
+//    }
+
+//    val usersFactorsRDD = results.mapPartitionsWithIndex { (index: Int, partiton: Iterator[ALSResult]) =>
+//      partiton.foreach { p =>
+//        val usersFactorsNumTab = OneDAL.makeNumericTable(p.cUsersFactorsNumTab)
+//        Service.printNumericTable("usersFactorsNumTab", usersFactorsNumTab)
+//      }
+//      Iterator()
+//    }.collect()
 
     val usersFactorsRDD = results.mapPartitionsWithIndex { (index: Int, partiton: Iterator[ALSResult]) =>
       val ret = partiton.flatMap { p =>
         val usersFactorsNumTab = OneDAL.makeNumericTable(p.cUsersFactorsNumTab)
         val nRows = usersFactorsNumTab.getNumberOfRows.toInt
         val nCols = usersFactorsNumTab.getNumberOfColumns.toInt
-        val buffer = DoubleBuffer.allocate(nCols * nRows)
+
+        println("usersFactorsNumTab", nRows, nCols)
+        val buffer = FloatBuffer.allocate(nCols * nRows)
 
         usersFactorsNumTab.getBlockOfRows(0, nRows, buffer)
-        (0 to nRows).map { index =>
-          val array = Array.fill(nCols){0.0}
-          buffer.get(array, index*nCols, nCols)
-          (index.asInstanceOf[ID], array.map(_.toFloat).toArray)
+        (0 until nRows).map { index =>
+          val array = Array.fill(nCols){0.0f}
+          buffer.get(array, 0, nCols)
+          (index.asInstanceOf[ID], array)
         }.toIterator
       }
       ret
-    }
+    }.cache()
 
     val itemsFactorsRDD = results.mapPartitionsWithIndex { (index: Int, partiton: Iterator[ALSResult]) =>
       val ret = partiton.flatMap { p =>
         val itemsFactorsNumTab = OneDAL.makeNumericTable(p.cItemsFactorsNumTab)
         val nRows = itemsFactorsNumTab.getNumberOfRows.toInt
         val nCols = itemsFactorsNumTab.getNumberOfColumns.toInt
-        val buffer = DoubleBuffer.allocate(nCols * nRows)
+        val buffer = FloatBuffer.allocate(nCols * nRows)
 
         itemsFactorsNumTab.getBlockOfRows(0, nRows, buffer)
-        (0 to nRows).map { index =>
-          val array = Array.fill(nCols){0.0}
-          buffer.get(array, index*nCols, nCols)
-          (index.asInstanceOf[ID], array.map(_.toFloat).toArray)
+        (0 until nRows).map { index =>
+          val array = Array.fill(nCols){0.0f}
+          buffer.get(array, 0, nCols)
+          (index.asInstanceOf[ID], array)
         }.toIterator
       }
       ret
-    }
-    println("usersFactorsRDD")
-    usersFactorsRDD.collect().foreach(println)
-    println("itemsFactorsRDD")
-    itemsFactorsRDD.collect().foreach(println)
+    }.cache()
+
+    usersFactorsRDD.count()
+    itemsFactorsRDD.count()
+
+//    println("usersFactorsRDD")
+//    val ret = usersFactorsRDD.collect()
+//    ret.toSeq.foreach { ((id, array) => }
+//
+//    println("itemsFactorsRDD")
+//    itemsFactorsRDD.collect().foreach(println)
 
     (usersFactorsRDD, itemsFactorsRDD)
-//    null
   }
 
   // Single entry to call Implict ALS DAL backend

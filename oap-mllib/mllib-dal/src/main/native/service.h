@@ -45,5 +45,6 @@ void printNumericTable(const NumericTablePtr & dataTable, const char * message =
                        size_t interval = 10);
 size_t serializeDAALObject(SerializationIface * pData, ByteBuffer & buffer);
 SerializationIfacePtr deserializeDAALObject(daal::byte * buff, size_t length);
+CSRNumericTable * createFloatSparseTable(const std::string & datasetFileName);
 
 #endif
