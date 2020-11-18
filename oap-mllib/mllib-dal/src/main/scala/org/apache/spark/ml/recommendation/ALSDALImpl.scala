@@ -212,11 +212,9 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
         val usersFactorsNumTab = OneDAL.makeNumericTable(p.cUsersFactorsNumTab)
         val nRows = usersFactorsNumTab.getNumberOfRows.toInt
         val nCols = usersFactorsNumTab.getNumberOfColumns.toInt
-
-        println("usersFactorsNumTab", nRows, nCols)
-        val buffer = FloatBuffer.allocate(nCols * nRows)
-
-        usersFactorsNumTab.getBlockOfRows(0, nRows, buffer)
+        var buffer = FloatBuffer.allocate(nCols * nRows)
+        // should use returned buffer
+        buffer = usersFactorsNumTab.getBlockOfRows(0, nRows, buffer)
         (0 until nRows).map { index =>
           val array = Array.fill(nCols){0.0f}
           buffer.get(array, 0, nCols)
@@ -231,9 +229,9 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
         val itemsFactorsNumTab = OneDAL.makeNumericTable(p.cItemsFactorsNumTab)
         val nRows = itemsFactorsNumTab.getNumberOfRows.toInt
         val nCols = itemsFactorsNumTab.getNumberOfColumns.toInt
-        val buffer = FloatBuffer.allocate(nCols * nRows)
-
-        itemsFactorsNumTab.getBlockOfRows(0, nRows, buffer)
+        var buffer = FloatBuffer.allocate(nCols * nRows)
+        // should use returned buffer
+        buffer = itemsFactorsNumTab.getBlockOfRows(0, nRows, buffer)
         (0 until nRows).map { index =>
           val array = Array.fill(nCols){0.0f}
           buffer.get(array, 0, nCols)
@@ -246,12 +244,13 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
     usersFactorsRDD.count()
     itemsFactorsRDD.count()
 
-//    println("usersFactorsRDD")
-//    val ret = usersFactorsRDD.collect()
-//    ret.toSeq.foreach { ((id, array) => }
+//    usersFactorsRDD.foreach { case (id, array) =>
+//        println("usersFactorsRDD", id, array.mkString(", "))
+//    }
 //
-//    println("itemsFactorsRDD")
-//    itemsFactorsRDD.collect().foreach(println)
+//    itemsFactorsRDD.foreach { case (id, array) =>
+//      println("itemsFactorsRDD", id, array.mkString(", "))
+//    }
 
     (usersFactorsRDD, itemsFactorsRDD)
   }
