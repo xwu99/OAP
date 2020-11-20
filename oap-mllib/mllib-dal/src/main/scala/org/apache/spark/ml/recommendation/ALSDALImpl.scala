@@ -6,6 +6,7 @@ import org.apache.spark.rdd.{ExecutorInProcessCoalescePartitioner, RDD}
 import scala.reflect.ClassTag
 import com.intel.daal.data_management.data.{CSRNumericTable, HomogenNumericTable, RowMergedNumericTable, Matrix => DALMatrix}
 import com.intel.daal.services.DaalContext
+import org.apache.spark.Partitioner
 import org.apache.spark.internal.Logging
 import org.apache.spark.ml.recommendation.ALS.Rating
 import org.apache.spark.ml.util._
@@ -13,6 +14,15 @@ import org.apache.spark.ml.util._
 import scala.collection.mutable.ArrayBuffer
 //import java.nio.DoubleBuffer
 import java.nio.FloatBuffer
+
+class ALSDataPartitioner(partitions: Int, itemsInBlock: Long)
+  extends Partitioner {
+  def numPartitions: Int = partitions
+  def getPartition(key: Any): Int = {
+    val k = key.asInstanceOf[Long]
+    (k / itemsInBlock).toInt
+  }
+}
 
 class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
   data: RDD[Rating[ID]],
@@ -49,12 +59,30 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
   }
 
   private def ratingsToCSRNumericTables(ratings: RDD[Rating[ID]],
-    nRatings: Long, nVectors: Long, nFeatures: Long): RDD[CSRNumericTable] = {
+    nRatings: Long, nVectors: Long, nFeatures: Long, nBlocks: Long): RDD[CSRNumericTable] = {
 
-    val rowSortedRatings = ratings.sortBy(_.user.toString.toLong)
-    val ratingsPartitionInfo = getRatingsPartitionInfo(rowSortedRatings)
+//    val rowSortedRatings = ratings.sortBy(_.user.toString.toLong)
 
-    rowSortedRatings.mapPartitionsWithIndex { case (partitionId, partition) =>
+    val itemsInBlock = (nVectors + nBlocks - 1) / nBlocks
+//    val rowSortedGrouped = rowSortedRatings.groupBy(value => value.user.toString.toLong / itemsInBlock).flatMap(_._2)
+    val rowSortedGrouped = ratings
+      .groupBy(value => value.user.toString.toLong)
+      .partitionBy(new ALSDataPartitioner(nBlocks.toInt, itemsInBlock))
+      .flatMap(_._2).mapPartitions { p =>
+        p.toArray.sortBy(_.user.toString.toLong).toIterator
+      }
+
+    rowSortedGrouped.mapPartitionsWithIndex { case (partitionId, partition) =>
+        println("partitionId", partitionId)
+        partition.foreach { p =>
+          println(p.user, p.item, p.rating) }
+        Iterator(partitionId)
+    }.collect()
+
+    val ratingsPartitionInfo = getRatingsPartitionInfo(rowSortedGrouped)
+    println("ratingsPartitionInfo:",  ratingsPartitionInfo)
+
+    rowSortedGrouped.mapPartitionsWithIndex { case (partitionId, partition) =>
       val ratingsNum = ratingsPartitionInfo(partitionId)._1
       val csrRowNum = ratingsPartitionInfo(partitionId)._2
       val values = Array.fill(ratingsNum) { 0.0f }
@@ -85,6 +113,7 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
       // one-based row index
       rowOffsets += index+1
 
+      println("csrRowNum", csrRowNum)
       println("rowOffsets", rowOffsets.mkString(","))
       println("columnIndices", columnIndices.mkString(","))
       println("values", values.mkString(","))
@@ -98,7 +127,11 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
       val table = new CSRNumericTable(contextLocal, cTable)
 //      table.pack()
 
-//      Service.printNumericTable("Input", table, 10)
+      println("PartitionId:", partitionId, "Input dimensions:", table.getNumberOfRows, table.getNumberOfColumns)
+
+      // There is a bug https://github.com/oneapi-src/oneDAL/pull/1288,
+      // printNumericTable can't print correct result for CSRNumericTable, use C++ printNumericTable
+      // Service.printNumericTable("Input: ", table)
 
       Iterator(table)
     }.cache()
@@ -125,19 +158,25 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
     val largestUsers = data.sortBy(_.user.toString.toLong, ascending = false).take(1)
     val nVectors = largestUsers(0).user.toString.toLong + 1
 
+    val nBlocks = executorNum
+
     val nRatings = data.count()
 
     logInfo(s"ALSDAL fit $nRatings ratings using $executorNum Executors for $nVectors vectors and $nFeatures features")
 
     val executorIPAddress = Utils.sparkFirstExecutorIP(data.sparkContext)
-    val dataForConversion = if (data.getNumPartitions < executorNum) {
-      data.repartition(executorNum).setName("Repartitioned for conversion").cache()
-    } else {
-      data
-    }
+
+
+
+//    val dataForConversion = if (data.getNumPartitions < executorNum) {
+//      data.repartition(executorNum).setName("Repartitioned for conversion").cache()
+//    } else {
+//      data
+//    }
 //    println("data.getNumPartitions", data.getNumPartitions)
 
-    val numericTables = ratingsToCSRNumericTables(dataForConversion, nRatings, nVectors, nFeatures)
+//    val numericTables = ratingsToCSRNumericTables(dataForConversion, nRatings, nVectors, nFeatures, nBlocks)
+    val numericTables = ratingsToCSRNumericTables(data, nRatings, nVectors, nFeatures, nBlocks)
     val results = numericTables.mapPartitions { iter =>
       val table = iter.next()
       val context = new DaalContext()
@@ -182,9 +221,11 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
 
       OneCCL.init(executorNum, executorIPAddress, OneCCL.KVS_PORT)
 
+      println("nVectors", nVectors)
+
       val result = new ALSResult()
       cDALImplictALS(
-        table.getCNumericTable, nUsers = 46,
+        table.getCNumericTable, nUsers = nVectors,
         rank, maxIter, regParam, alpha,
         executorNum,
         executorCores,

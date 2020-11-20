@@ -19,6 +19,8 @@
 #include <cstring>
 #include "org_apache_spark_ml_util_OneDAL__.h"
 
+#include "service.h"
+
 using namespace daal;
 using namespace daal::data_management;
 
@@ -166,6 +168,8 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_util_OneDAL_00024_cNewCSRNumeri
     env->ReleaseFloatArrayElements(data, pData, 0);
 
     CSRNumericTablePtr *ret = new CSRNumericTablePtr(numericTable);
+
+    printNumericTable(*ret, "cNewCSRNumericTable");    
 
     return (jlong)ret;
 }
