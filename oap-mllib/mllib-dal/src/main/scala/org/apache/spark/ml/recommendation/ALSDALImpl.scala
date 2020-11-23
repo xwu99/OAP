@@ -63,9 +63,14 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
 
 //    val rowSortedRatings = ratings.sortBy(_.user.toString.toLong)
 
-    val itemsInBlock = (nVectors + nBlocks - 1) / nBlocks
+    val itemsInBlock = (nFeatures + nBlocks - 1) / nBlocks
+//    val itemsInBlock = (nFeatures + nBlocks - 1) / nBlocks
 //    val rowSortedGrouped = rowSortedRatings.groupBy(value => value.user.toString.toLong / itemsInBlock).flatMap(_._2)
     val rowSortedGrouped = ratings
+      // Transpose the dataset
+      .map { p =>
+        Rating(p.item, p.user, p.rating)
+      }
       .groupBy(value => value.user.toString.toLong)
       .partitionBy(new ALSDataPartitioner(nBlocks.toInt, itemsInBlock))
       .flatMap(_._2).mapPartitions { p =>
@@ -113,6 +118,7 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
       // one-based row index
       rowOffsets += index+1
 
+      println("PartitionId:", partitionId)
       println("csrRowNum", csrRowNum)
       println("rowOffsets", rowOffsets.mkString(","))
       println("columnIndices", columnIndices.mkString(","))
@@ -123,11 +129,11 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
       println("ALSDALImpl: Loading native libraries ..." )
       LibLoader.loadLibraries()
 
-      val cTable = OneDAL.cNewCSRNumericTable(values, columnIndices, rowOffsets.toArray, nFeatures, csrRowNum)
+      val cTable = OneDAL.cNewCSRNumericTable(values, columnIndices, rowOffsets.toArray, nVectors, csrRowNum)
       val table = new CSRNumericTable(contextLocal, cTable)
 //      table.pack()
 
-      println("PartitionId:", partitionId, "Input dimensions:", table.getNumberOfRows, table.getNumberOfColumns)
+      println("Input dimensions:", table.getNumberOfRows, table.getNumberOfColumns)
 
       // There is a bug https://github.com/oneapi-src/oneDAL/pull/1288,
       // printNumericTable can't print correct result for CSRNumericTable, use C++ printNumericTable

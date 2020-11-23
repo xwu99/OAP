@@ -19,10 +19,10 @@ size_t rankId, comm_size;
 #define ccl_root 0
 
 /* Number of observations in transposed training data set blocks */
-const string trainDatasetFileNames[] = { "/home/xiaochang/Works/onedal-experiment/als-oneccl/data/implicit_als_trans_csr_1.csv", 
-                                         "/home/xiaochang/Works/onedal-experiment/als-oneccl/data/implicit_als_trans_csr_2.csv",
-                                         "/home/xiaochang/Works/onedal-experiment/als-oneccl/data/implicit_als_trans_csr_3.csv",
-                                         "/home/xiaochang/Works/onedal-experiment/als-oneccl/data/implicit_als_trans_csr_4.csv" };
+const string trainDatasetFileNames[] = { "/home/xiaochang/Works/onedal-experiment/als-oneccl/data/implicit_als_csr_2.csv", 
+                                         "/home/xiaochang/Works/onedal-experiment/als-oneccl/data/implicit_als_csr_1.csv",
+                                         "/home/xiaochang/Works/onedal-experiment/als-oneccl/data/implicit_als_csr_3.csv",
+                                         "/home/xiaochang/Works/onedal-experiment/als-oneccl/data/implicit_als_csr_4.csv" };
 
 static int usersPartition[1] = { nBlocks };
 
@@ -542,8 +542,9 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_recommendation_ALSDALImpl_cDALI
 
     cout << "Started" << endl;
 
-    readData();
-    // dataTable = *((CSRNumericTablePtr *)numTableAddr);
+    // readData();
+    dataTable = *((CSRNumericTablePtr *)numTableAddr);    
+    printNumericTable(dataTable, "readData");
 
     cout << "readData DONE" << endl;
     
