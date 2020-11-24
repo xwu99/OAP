@@ -21,6 +21,10 @@ class ALSDataPartitioner(partitions: Int, itemsInBlock: Long)
   def getPartition(key: Any): Int = {
     val k = key.asInstanceOf[Long]
     (k / itemsInBlock).toInt
+//    if (k < 15)
+//      (k / 5).toInt
+//    else
+//      3
   }
 }
 
@@ -77,12 +81,12 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
         p.toArray.sortBy(_.user.toString.toLong).toIterator
       }
 
-    rowSortedGrouped.mapPartitionsWithIndex { case (partitionId, partition) =>
-        println("partitionId", partitionId)
-        partition.foreach { p =>
-          println(p.user, p.item, p.rating) }
-        Iterator(partitionId)
-    }.collect()
+//    rowSortedGrouped.mapPartitionsWithIndex { case (partitionId, partition) =>
+//        println("partitionId", partitionId)
+//        partition.foreach { p =>
+//          println(p.user, p.item, p.rating) }
+//        Iterator(partitionId)
+//    }.collect()
 
     val ratingsPartitionInfo = getRatingsPartitionInfo(rowSortedGrouped)
     println("ratingsPartitionInfo:",  ratingsPartitionInfo)
@@ -93,6 +97,7 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
       val values = Array.fill(ratingsNum) { 0.0f }
       val columnIndices = Array.fill(ratingsNum) { 0L }
       val rowOffsets = ArrayBuffer[Long](1L)
+
 
       var index = 0
       var curRow = 0L
@@ -227,7 +232,7 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
 
       OneCCL.init(executorNum, executorIPAddress, OneCCL.KVS_PORT)
 
-      println("nVectors", nVectors)
+      println("nUsers", nVectors)
 
       val result = new ALSResult()
       cDALImplictALS(
