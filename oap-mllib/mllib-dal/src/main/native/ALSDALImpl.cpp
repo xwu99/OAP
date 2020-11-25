@@ -2,6 +2,7 @@
 #include <chrono>
 #include <ccl.h>
 #include <daal.h>
+#include <assert.h>
 #include "service.h"
 #include "org_apache_spark_ml_recommendation_ALSDALImpl.h"
 
@@ -510,20 +511,66 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_recommendation_ALSDALImpl_cDALI
 
     printNumericTable(pUser, "User Factors:");
     printNumericTable(pItem, "Item Factors:");
+
+    if (rankId == ccl_root) {
+        for (int i = 0; i < nBlocks; i++) {
+            printNumericTable(NumericTable::cast((*userOffsetsOnMaster)[i]), "userOffsetsOnMaster");
+        }        
+
+        for (int i = 0; i < nBlocks; i++) {
+            printNumericTable(NumericTable::cast((*itemOffsetsOnMaster)[i]), "itemOffsetsOnMaster");
+        }        
+    }
+    
 //    printf("native pUser %ld, pItem %ld", (jlong)&pUser, (jlong)&pItem);
 
     // Get the class of the input object
     jclass clazz = env->GetObjectClass(resultObj);
+
+    // Fill in rankId
+    jfieldID cRankIdField = env->GetFieldID(clazz, "rankId", "J");
+    env->SetLongField(resultObj, cRankIdField, (jlong)rankId);
+
+    // Fill in cUsersFactorsNumTab & cItemsFactorsNumTab
     // Get Field references
     jfieldID cUsersFactorsNumTabField = env->GetFieldID(clazz, "cUsersFactorsNumTab", "J");
     jfieldID cItemsFactorsNumTabField = env->GetFieldID(clazz, "cItemsFactorsNumTab", "J");
-
     // Set factors as result, should use heap memory
     NumericTablePtr *retUser = new NumericTablePtr(pUser);
     NumericTablePtr *retItem = new NumericTablePtr(pItem);
-
     env->SetLongField(resultObj, cUsersFactorsNumTabField, (jlong)retUser);
     env->SetLongField(resultObj, cItemsFactorsNumTabField, (jlong)retItem);
+
+    // Fill in cUserOffsetsOnMaster & cItemOffsetsOnMaster
+    if (rankId == ccl_root) {
+        jfieldID cUserOffsetsOnMasterField = env->GetFieldID(clazz, "cUserOffsetsOnMaster", "[J");
+        assert(cUserOffsetsOnMasterField != NULL);
+
+        jobject mvdataUser = env->GetObjectField(resultObj, cUserOffsetsOnMasterField);
+        assert(mvdataUser != NULL);
+
+        jlongArray arrUser = static_cast<jlongArray>(mvdataUser);
+        long * dataUserOffsets = env->GetLongArrayElements(arrUser, NULL);
+        assert(dataUserOffsets != NULL);
+
+        jfieldID cItemOffsetsOnMasterField = env->GetFieldID(clazz, "cItemOffsetsOnMaster", "[J");
+        assert(cItemOffsetsOnMasterField != NULL);
+
+        jobject mvdataItem = env->GetObjectField(resultObj, cItemOffsetsOnMasterField);
+        jlongArray arrItem = static_cast<jlongArray>(mvdataItem);
+        long * dataItemOffsets = env->GetLongArrayElements(arrItem, NULL);
+        assert(dataItemOffsets != NULL);
+
+        for (int i = 0; i < nBlocks; i++) {
+            NumericTablePtr *retUserOffsets = new NumericTablePtr(NumericTable::cast((*userOffsetsOnMaster)[i]));
+            NumericTablePtr *retItemOffsets = new NumericTablePtr(NumericTable::cast((*itemOffsetsOnMaster)[i]));
+            dataUserOffsets[i] = (jlong)retUserOffsets;
+            dataItemOffsets[i] = (jlong)retItemOffsets;
+        }
+        
+        env->ReleaseLongArrayElements(arrUser, dataUserOffsets, 0);
+        env->ReleaseLongArrayElements(arrItem, dataItemOffsets, 0);
+    }
 
     return 0;
 }

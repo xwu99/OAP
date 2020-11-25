@@ -234,7 +234,7 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
 
       println("nUsers", nVectors)
 
-      val result = new ALSResult()
+      val result = new ALSResult(nBlocks)
       cDALImplictALS(
         table.getCNumericTable, nUsers = nVectors,
         rank, maxIter, regParam, alpha,
@@ -245,11 +245,20 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
       Iterator(result)
     }.cache()
 
-//    results.foreach { p =>
+    results.foreach { p =>
 //      val usersFactorsNumTab = OneDAL.makeNumericTable(p.cUsersFactorsNumTab)
 //      println("foreach", p.cUsersFactorsNumTab, p.cItemsFactorsNumTab)
-////      Service.printNumericTable("usersFactorsNumTab", usersFactorsNumTab)
-//    }
+      println("result", p.rankId);
+      if (p.rankId == 0) {
+        for (i <- 0 until nBlocks) {
+          val userOffsetTab = OneDAL.makeNumericTable(p.cUserOffsetsOnMaster(i))
+          val itemOffsetTab = OneDAL.makeNumericTable(p.cItemOffsetsOnMaster(i))
+          Service.printNumericTable("cUserOffsetsOnMaster " + i, userOffsetTab)
+          Service.printNumericTable("cItemOffsetsOnMaster " + i, itemOffsetTab)
+        }
+      }
+
+    }
 
 //    val usersFactorsRDD = results.mapPartitionsWithIndex { (index: Int, partiton: Iterator[ALSResult]) =>
 //      partiton.foreach { p =>
