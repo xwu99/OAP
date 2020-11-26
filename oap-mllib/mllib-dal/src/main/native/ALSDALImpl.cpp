@@ -18,8 +18,8 @@ typedef float algorithmFPType; /* Algorithm floating-point type */
 NumericTablePtr userOffset;
 NumericTablePtr itemOffset;
 
-KeyValueDataCollectionPtr userOffsetsOnMaster;
-KeyValueDataCollectionPtr itemOffsetsOnMaster;
+// KeyValueDataCollectionPtr userOffsetsOnMaster;
+// KeyValueDataCollectionPtr itemOffsetsOnMaster;
 
 CSRNumericTablePtr dataTable;
 CSRNumericTablePtr transposedDataTable;
@@ -33,7 +33,7 @@ std::vector<training::DistributedPartialResultStep4Ptr> itemsPartialResultsMaste
 std::vector<training::DistributedPartialResultStep4Ptr> usersPartialResultsMaster;
 
 template <typename T>
-void gather(size_t rankId, int nBlocks, const ByteBuffer & nodeResults,  T * result)
+void gather(size_t rankId, size_t nBlocks, const ByteBuffer & nodeResults,  T * result)
 {
     size_t perNodeArchLengthMaster[nBlocks];
     size_t perNodeArchLength = nodeResults.size();
@@ -41,7 +41,7 @@ void gather(size_t rankId, int nBlocks, const ByteBuffer & nodeResults,  T * res
     ccl_request_t request;
 
     size_t recv_counts[nBlocks];
-    for (int i = 0; i < nBlocks; i++)
+    for (size_t i = 0; i < nBlocks; i++)
         recv_counts[i] = sizeof(size_t);
 
     // MPI_Gather(&perNodeArchLength, sizeof(int), MPI_CHAR, perNodeArchLengthMaster, sizeof(int), MPI_CHAR, ccl_root, MPI_COMM_WORLD);
@@ -84,96 +84,96 @@ void gather(size_t rankId, int nBlocks, const ByteBuffer & nodeResults,  T * res
     
 }
 
-void gatherUsers(const ByteBuffer & nodeResults, int nBlocks)
-{
-    size_t perNodeArchLengthMaster[nBlocks];
-    size_t perNodeArchLength = nodeResults.size();
-    ByteBuffer serializedData;
-    size_t recv_counts[nBlocks];
-    for (int i = 0; i < nBlocks; i++) {
-        recv_counts[i] = sizeof(size_t);
-    }
+// void gatherUsers(const ByteBuffer & nodeResults, int nBlocks)
+// {
+//     size_t perNodeArchLengthMaster[nBlocks];
+//     size_t perNodeArchLength = nodeResults.size();
+//     ByteBuffer serializedData;
+//     size_t recv_counts[nBlocks];
+//     for (int i = 0; i < nBlocks; i++) {
+//         recv_counts[i] = sizeof(size_t);
+//     }
 
-    ccl_request_t request;
-    // MPI_Allgather(&perNodeArchLength, sizeof(int), MPI_CHAR, perNodeArchLengthMaster, sizeof(int), MPI_CHAR, MPI_COMM_WORLD);
-    ccl_allgatherv(&perNodeArchLength, sizeof(size_t), perNodeArchLengthMaster, recv_counts, ccl_dtype_char, NULL, NULL, NULL, &request);
-    ccl_wait(request);
+//     ccl_request_t request;
+//     // MPI_Allgather(&perNodeArchLength, sizeof(int), MPI_CHAR, perNodeArchLengthMaster, sizeof(int), MPI_CHAR, MPI_COMM_WORLD);
+//     ccl_allgatherv(&perNodeArchLength, sizeof(size_t), perNodeArchLengthMaster, recv_counts, ccl_dtype_char, NULL, NULL, NULL, &request);
+//     ccl_wait(request);
 
-    size_t memoryBuf = 0;
-    for (int i = 0; i < nBlocks; i++)
-    {
-        memoryBuf += perNodeArchLengthMaster[i];
-    }
-    serializedData.resize(memoryBuf);
+//     size_t memoryBuf = 0;
+//     for (int i = 0; i < nBlocks; i++)
+//     {
+//         memoryBuf += perNodeArchLengthMaster[i];
+//     }
+//     serializedData.resize(memoryBuf);
 
-    size_t shift = 0;
-    std::vector<int> displs(nBlocks);
-    for (int i = 0; i < nBlocks; i++)
-    {
-        displs[i] = shift;
-        shift += perNodeArchLengthMaster[i];
-    }
+//     size_t shift = 0;
+//     std::vector<int> displs(nBlocks);
+//     for (int i = 0; i < nBlocks; i++)
+//     {
+//         displs[i] = shift;
+//         shift += perNodeArchLengthMaster[i];
+//     }
 
-    /* Transfer partial results to step 2 on the root node */
-    // MPI_Allgatherv(&nodeResults[0], perNodeArchLength, MPI_CHAR, &serializedData[0], perNodeArchLengthMaster, displs, MPI_CHAR, MPI_COMM_WORLD);
-    ccl_allgatherv(&nodeResults[0], perNodeArchLength, &serializedData[0], perNodeArchLengthMaster, ccl_dtype_char, NULL, NULL, NULL, &request);
-    ccl_wait(request);
+//     /* Transfer partial results to step 2 on the root node */
+//     // MPI_Allgatherv(&nodeResults[0], perNodeArchLength, MPI_CHAR, &serializedData[0], perNodeArchLengthMaster, displs, MPI_CHAR, MPI_COMM_WORLD);
+//     ccl_allgatherv(&nodeResults[0], perNodeArchLength, &serializedData[0], perNodeArchLengthMaster, ccl_dtype_char, NULL, NULL, NULL, &request);
+//     ccl_wait(request);
 
-    usersPartialResultsMaster.resize(nBlocks);
-    for (int i = 0; i < nBlocks; i++)
-    {
-        /* Deserialize partial results from step 4 */
-        usersPartialResultsMaster[i] =
-            training::DistributedPartialResultStep4::cast(deserializeDAALObject(&serializedData[0] + displs[i], perNodeArchLengthMaster[i]));
-    }
-}
+//     usersPartialResultsMaster.resize(nBlocks);
+//     for (int i = 0; i < nBlocks; i++)
+//     {
+//         /* Deserialize partial results from step 4 */
+//         usersPartialResultsMaster[i] =
+//             training::DistributedPartialResultStep4::cast(deserializeDAALObject(&serializedData[0] + displs[i], perNodeArchLengthMaster[i]));
+//     }
+// }
 
-void gatherItems(const ByteBuffer & nodeResults, int nBlocks)
-{
-    size_t perNodeArchLengthMaster[nBlocks];
-    size_t perNodeArchLength = nodeResults.size();
-    ByteBuffer serializedData;
-    size_t recv_counts[nBlocks];
-    for (int i = 0; i < nBlocks; i++) {
-        recv_counts[i] = sizeof(size_t);
-    }    
+// void gatherItems(const ByteBuffer & nodeResults, size_t nBlocks)
+// {
+//     size_t perNodeArchLengthMaster[nBlocks];
+//     size_t perNodeArchLength = nodeResults.size();
+//     ByteBuffer serializedData;
+//     size_t recv_counts[nBlocks];
+//     for (size_t i = 0; i < nBlocks; i++) {
+//         recv_counts[i] = sizeof(size_t);
+//     }    
 
-    ccl_request_t request;    
-    // MPI_Allgather(&perNodeArchLength, sizeof(int), MPI_CHAR, perNodeArchLengthMaster, sizeof(int), MPI_CHAR, MPI_COMM_WORLD);
-    ccl_allgatherv(&perNodeArchLength, sizeof(size_t), perNodeArchLengthMaster, recv_counts, ccl_dtype_char, NULL, NULL, NULL, &request);
-    ccl_wait(request);
+//     ccl_request_t request;    
+//     // MPI_Allgather(&perNodeArchLength, sizeof(int), MPI_CHAR, perNodeArchLengthMaster, sizeof(int), MPI_CHAR, MPI_COMM_WORLD);
+//     ccl_allgatherv(&perNodeArchLength, sizeof(size_t), perNodeArchLengthMaster, recv_counts, ccl_dtype_char, NULL, NULL, NULL, &request);
+//     ccl_wait(request);
 
-    size_t memoryBuf = 0;
-    for (int i = 0; i < nBlocks; i++)
-    {
-        memoryBuf += perNodeArchLengthMaster[i];
-    }
-    serializedData.resize(memoryBuf);
+//     size_t memoryBuf = 0;
+//     for (size_t i = 0; i < nBlocks; i++)
+//     {
+//         memoryBuf += perNodeArchLengthMaster[i];
+//     }
+//     serializedData.resize(memoryBuf);
 
-    size_t shift = 0;
-    std::vector<int> displs(nBlocks);
-    for (int i = 0; i < nBlocks; i++)
-    {
-        displs[i] = shift;
-        shift += perNodeArchLengthMaster[i];
-    }
+//     size_t shift = 0;
+//     std::vector<int> displs(nBlocks);
+//     for (size_t i = 0; i < nBlocks; i++)
+//     {
+//         displs[i] = shift;
+//         shift += perNodeArchLengthMaster[i];
+//     }
 
-    /* Transfer partial results to step 2 on the root node */
-    // MPI_Allgatherv(&nodeResults[0], perNodeArchLength, MPI_CHAR, &serializedData[0], perNodeArchLengthMaster, displs, MPI_CHAR, MPI_COMM_WORLD);    
-    ccl_allgatherv(&nodeResults[0], perNodeArchLength, &serializedData[0], perNodeArchLengthMaster, ccl_dtype_char, NULL, NULL, NULL, &request);
-    ccl_wait(request);
+//     /* Transfer partial results to step 2 on the root node */
+//     // MPI_Allgatherv(&nodeResults[0], perNodeArchLength, MPI_CHAR, &serializedData[0], perNodeArchLengthMaster, displs, MPI_CHAR, MPI_COMM_WORLD);    
+//     ccl_allgatherv(&nodeResults[0], perNodeArchLength, &serializedData[0], perNodeArchLengthMaster, ccl_dtype_char, NULL, NULL, NULL, &request);
+//     ccl_wait(request);
     
-    itemsPartialResultsMaster.resize(nBlocks);
-    for (int i = 0; i < nBlocks; i++)
-    {
-        /* Deserialize partial results from step 4 */
-        itemsPartialResultsMaster[i] =
-            training::DistributedPartialResultStep4::cast(deserializeDAALObject(&serializedData[0] + displs[i], perNodeArchLengthMaster[i]));
-    }
-}
+//     itemsPartialResultsMaster.resize(nBlocks);
+//     for (size_t i = 0; i < nBlocks; i++)
+//     {
+//         /* Deserialize partial results from step 4 */
+//         itemsPartialResultsMaster[i] =
+//             training::DistributedPartialResultStep4::cast(deserializeDAALObject(&serializedData[0] + displs[i], perNodeArchLengthMaster[i]));
+//     }
+// }
 
 template <typename T>
-void all2all(ByteBuffer * nodeResults, int nBlocks, KeyValueDataCollectionPtr result)
+void all2all(ByteBuffer * nodeResults, size_t nBlocks, KeyValueDataCollectionPtr result)
 {
     size_t memoryBuf = 0;
     size_t shift  = 0;
@@ -183,7 +183,7 @@ void all2all(ByteBuffer * nodeResults, int nBlocks, KeyValueDataCollectionPtr re
     ByteBuffer serializedSendData;
     ByteBuffer serializedRecvData;
 
-    for (int i = 0; i < nBlocks; i++)
+    for (size_t i = 0; i < nBlocks; i++)
     {
         perNodeArchLengths[i] = nodeResults[i].size();        
         memoryBuf += perNodeArchLengths[i];
@@ -194,9 +194,9 @@ void all2all(ByteBuffer * nodeResults, int nBlocks, KeyValueDataCollectionPtr re
 
     /* memcpy to avoid double compute */
     memoryBuf = 0;
-    for (int i = 0; i < nBlocks; i++)
+    for (size_t i = 0; i < nBlocks; i++)
     {
-        for (int j = 0; j < perNodeArchLengths[i]; j++) serializedSendData[memoryBuf + j] = nodeResults[i][j];
+        for (size_t j = 0; j < perNodeArchLengths[i]; j++) serializedSendData[memoryBuf + j] = nodeResults[i][j];
         memoryBuf += perNodeArchLengths[i];
     }
 
@@ -208,7 +208,7 @@ void all2all(ByteBuffer * nodeResults, int nBlocks, KeyValueDataCollectionPtr re
     memoryBuf = 0;
     shift     = 0;
     std::vector<size_t> rdispls(nBlocks);
-    for (int i = 0; i < nBlocks; i++)
+    for (size_t i = 0; i < nBlocks; i++)
     {
         memoryBuf += perNodeArchLengthsRecv[i];
         rdispls[i] = shift;
@@ -229,7 +229,7 @@ void all2all(ByteBuffer * nodeResults, int nBlocks, KeyValueDataCollectionPtr re
     }
 }
 
-KeyValueDataCollectionPtr initializeStep1Local(size_t rankId, size_t nBlocks, size_t nUsers, size_t nFactors)
+KeyValueDataCollectionPtr initializeStep1Local(size_t rankId, size_t partitionId, size_t nBlocks, size_t nUsers, size_t nFactors)
 {
     int usersPartition[1] = { (int)nBlocks };    
 
@@ -248,10 +248,10 @@ KeyValueDataCollectionPtr initializeStep1Local(size_t rankId, size_t nBlocks, si
     training::init::PartialResultPtr partialResult = initAlgorithm.getPartialResult();
     itemStep3LocalInput                            = partialResult->get(training::init::outputOfInitForComputeStep3);
     userOffset                                     = partialResult->get(training::init::offsets, (size_t)rankId);
-    if (rankId == ccl_root)
-    {
-        userOffsetsOnMaster = partialResult->get(training::init::offsets);
-    }
+    // if (rankId == ccl_root)
+    // {
+    //     userOffsetsOnMaster = partialResult->get(training::init::offsets);
+    // }
     PartialModelPtr partialModelLocal = partialResult->get(training::init::partialModel);
 
     itemsPartialResultLocal.reset(new training::DistributedPartialResultStep4());
@@ -260,7 +260,7 @@ KeyValueDataCollectionPtr initializeStep1Local(size_t rankId, size_t nBlocks, si
     return partialResult->get(training::init::outputOfStep1ForStep2);
 }
 
-void initializeStep2Local(size_t rankId, const KeyValueDataCollectionPtr & initStep2LocalInput)
+void initializeStep2Local(size_t rankId, size_t partitionId, const KeyValueDataCollectionPtr & initStep2LocalInput)
 {
     /* Create an algorithm object to perform the second step of the implicit ALS initialization algorithm */
     training::init::Distributed<step2Local, algorithmFPType, training::init::fastCSR> initAlgorithm;
@@ -274,16 +274,16 @@ void initializeStep2Local(size_t rankId, const KeyValueDataCollectionPtr & initS
     transposedDataTable                                            = CSRNumericTable::cast(partialResult->get(training::init::transposedData));
     userStep3LocalInput                                            = partialResult->get(training::init::outputOfInitForComputeStep3);
     itemOffset                                                     = partialResult->get(training::init::offsets, (size_t)rankId);
-    if (rankId == ccl_root)
-    {
-        itemOffsetsOnMaster = partialResult->get(training::init::offsets);
-    }
+    // if (rankId == ccl_root)
+    // {
+    //     itemOffsetsOnMaster = partialResult->get(training::init::offsets);
+    // }
 }
 
-void initializeModel(size_t rankId, size_t nBlocks, size_t nUsers, size_t nFactors)
+void initializeModel(size_t rankId, size_t partitionId, size_t nBlocks, size_t nUsers, size_t nFactors)
 {    
     std::cout << "initializeModel " << std::endl;
-    KeyValueDataCollectionPtr initStep1LocalResult = initializeStep1Local(rankId, nBlocks, nUsers, nFactors);
+    KeyValueDataCollectionPtr initStep1LocalResult = initializeStep1Local(rankId, partitionId, nBlocks, nUsers, nFactors);
     
     /* MPI_Alltoallv to populate initStep2LocalInput */
     ByteBuffer nodeCPs[nBlocks];
@@ -294,7 +294,7 @@ void initializeModel(size_t rankId, size_t nBlocks, size_t nUsers, size_t nFacto
     KeyValueDataCollectionPtr initStep2LocalInput(new KeyValueDataCollection());
     all2all<NumericTable>(nodeCPs, nBlocks, initStep2LocalInput);
 
-    initializeStep2Local(rankId, initStep2LocalInput);
+    initializeStep2Local(rankId, partitionId, initStep2LocalInput);
 }
 
 training::DistributedPartialResultStep1Ptr computeStep1Local(const training::DistributedPartialResultStep4Ptr & partialResultLocal, size_t nFactors)
@@ -361,7 +361,7 @@ training::DistributedPartialResultStep4Ptr computeStep4Local(const CSRNumericTab
     return algorithm.getPartialResult();
 }
 
-void trainModel(size_t rankId, size_t nBlocks, size_t nFactors, size_t maxIterations)
+void trainModel(size_t rankId, size_t partitionId, size_t nBlocks, size_t nFactors, size_t maxIterations)
 {
     std::cout << "trainModel" << std::endl;
 
@@ -490,9 +490,15 @@ static size_t getOffsetFromOffsetTable(NumericTablePtr offsetTable) {
     return ret;
 }
 
+/*
+ * Class:     org_apache_spark_ml_recommendation_ALSDALImpl
+ * Method:    cDALImplictALS
+ * Signature: (JJIIDDIIILorg/apache/spark/ml/recommendation/ALSResult;)J
+ */
+
 JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_recommendation_ALSDALImpl_cDALImplictALS
   (JNIEnv *env, jobject obj, jlong numTableAddr, jlong nUsers, jint nFactors, jint maxIter, jdouble regParam, jdouble alpha,
-   jint executor_num, jint executor_cores, jobject resultObj)
+   jint executor_num, jint executor_cores, jint partitionId, jobject resultObj)
 {
     size_t rankId;
     ccl_get_comm_rank(NULL, &rankId);
@@ -506,13 +512,13 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_recommendation_ALSDALImpl_cDALI
     cout << "getDataSize: " << dataTable->getDataSize() << endl;
 
     // Set number of threads for oneDAL to use for each rank
-    // services::Environment::getInstance()->setNumberOfThreads(executor_cores);
-    // int nThreadsNew = services::Environment::getInstance()->getNumberOfThreads();
-    // cout << "oneDAL (native): Number of threads used: " << nThreadsNew << endl;
+    services::Environment::getInstance()->setNumberOfThreads(executor_cores);
+    int nThreadsNew = services::Environment::getInstance()->getNumberOfThreads();
+    cout << "oneDAL (native): Number of threads used: " << nThreadsNew << endl;
 
     int nBlocks = executor_num;
-    initializeModel(rankId, nBlocks, nUsers, nFactors);
-    trainModel(rankId, executor_num, nFactors, maxIter);
+    initializeModel(rankId, partitionId, nBlocks, nUsers, nFactors);
+    trainModel(rankId, partitionId, executor_num, nFactors, maxIter);
 
     auto pUser = usersPartialResultLocal->get(training::outputOfStep4ForStep1)->getFactors();
     // auto pUserIndices = usersPartialResultLocal->get(training::outputOfStep4ForStep1)->getIndices();
@@ -520,10 +526,12 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_recommendation_ALSDALImpl_cDALI
     // auto pItemIndices = itemsPartialResultsMaster[i]->get(training::outputOfStep4ForStep1)->getIndices();
 
     std::cout << "\n=== Results for Rank " << rankId << "===\n" << std::endl;    
+    std::cout << "Partition ID: " << partitionId << std::endl;
     printNumericTable(pUser, "User Factors:");
     printNumericTable(pItem, "Item Factors:");
     std::cout << "User Offset: " << getOffsetFromOffsetTable(userOffset) << std::endl;
     std::cout << "Item Offset: " << getOffsetFromOffsetTable(itemOffset) << std::endl;
+    std::cout << std::endl;
 
     // printNumericTable(userOffset, "userOffset");
     // printNumericTable(itemOffset, "itemOffset");

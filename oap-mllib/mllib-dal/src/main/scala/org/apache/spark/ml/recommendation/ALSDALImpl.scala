@@ -148,16 +148,16 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
     }.cache()
   }
 
-  def factorsToRDD(cUsersFactorsNumTab: Long, cItemsFactorsNumTab: Long)
-    :(RDD[(ID, Array[Float])], RDD[(ID, Array[Float])]) = {
-    val usersFactorsNumTab = OneDAL.makeNumericTable(cUsersFactorsNumTab)
-    val itemsFactorsNumTab = OneDAL.makeNumericTable(cItemsFactorsNumTab)
-
-    Service.printNumericTable("usersFactorsNumTab", usersFactorsNumTab)
-    Service.printNumericTable("itemsFactorsNumTab", itemsFactorsNumTab)
-
-    null
-  }
+//  def factorsToRDD(cUsersFactorsNumTab: Long, cItemsFactorsNumTab: Long)
+//    :(RDD[(ID, Array[Float])], RDD[(ID, Array[Float])]) = {
+//    val usersFactorsNumTab = OneDAL.makeNumericTable(cUsersFactorsNumTab)
+//    val itemsFactorsNumTab = OneDAL.makeNumericTable(cItemsFactorsNumTab)
+//
+//    Service.printNumericTable("usersFactorsNumTab", usersFactorsNumTab)
+//    Service.printNumericTable("itemsFactorsNumTab", itemsFactorsNumTab)
+//
+//    null
+//  }
 
   def run(): (RDD[(ID, Array[Float])], RDD[(ID, Array[Float])]) = {
     val executorNum = Utils.sparkExecutorNum()
@@ -186,7 +186,7 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
 
 //    val numericTables = ratingsToCSRNumericTables(dataForConversion, nRatings, nVectors, nFeatures, nBlocks)
     val numericTables = ratingsToCSRNumericTables(data, nRatings, nVectors, nFeatures, nBlocks)
-    val results = numericTables.mapPartitions { iter =>
+    val results = numericTables.mapPartitionsWithIndex { (index, iter) =>
       val table = iter.next()
       val context = new DaalContext()
 //      table.unpack(context)
@@ -238,6 +238,7 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
         rank, maxIter, regParam, alpha,
         executorNum,
         executorCores,
+        index,
         result
       )
       Iterator(result)
@@ -316,6 +317,7 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
                                      alpha: Double,
                                      executor_num: Int,
                                      executor_cores: Int,
+                                     partitionId: Int,
                                      result: ALSResult): Long
 
 }

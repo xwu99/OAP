@@ -135,8 +135,8 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_util_OneDAL_00024_cNewCSRNumeri
   (JNIEnv *env, jobject, jfloatArray data, jlongArray colIndices, jlongArray rowOffsets, jlong nFeatures, jlong nVectors) {
 
     long numData = env->GetArrayLength(data);
-    long numColIndices = numData;
-    long numRowOffsets = env->GetArrayLength(rowOffsets);
+    // long numColIndices = numData;
+    // long numRowOffsets = env->GetArrayLength(rowOffsets);
 
     size_t * resultRowOffsets      = NULL;
     size_t * resultColIndices      = NULL;
@@ -153,12 +153,12 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_util_OneDAL_00024_cNewCSRNumeri
     // std::memcpy(resultColIndices, pColIndices, numColIndices*sizeof(jlong));
     // std::memcpy(resultData, pData, numData*sizeof(float));
 
-    for (size_t i = 0; i < numData; ++i)
+    for (size_t i = 0; i < (size_t)numData; ++i)
     {
         resultData[i]       = pData[i];
         resultColIndices[i] = pColIndices[i];
     }
-    for (size_t i = 0; i < nVectors + 1; ++i)
+    for (size_t i = 0; i < (size_t)nVectors + 1; ++i)
     {
         resultRowOffsets[i] = pRowOffsets[i];
     }
