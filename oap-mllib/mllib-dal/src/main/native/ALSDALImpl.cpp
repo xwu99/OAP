@@ -480,6 +480,16 @@ void trainModel(size_t rankId, size_t nBlocks, size_t nFactors, size_t maxIterat
     // gatherUsers(nodeResults, nBlocks);
 }
 
+static size_t getOffsetFromOffsetTable(NumericTablePtr offsetTable) {
+    size_t ret;
+    BlockDescriptor<int> block;
+    offsetTable->getBlockOfRows(0, 1, readOnly, block);
+    ret = (size_t)((block.getBlockPtr())[0]);
+    offsetTable->releaseBlockOfRows(block);
+
+    return ret;
+}
+
 JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_recommendation_ALSDALImpl_cDALImplictALS
   (JNIEnv *env, jobject obj, jlong numTableAddr, jlong nUsers, jint nFactors, jint maxIter, jdouble regParam, jdouble alpha,
    jint executor_num, jint executor_cores, jobject resultObj)
@@ -509,18 +519,24 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_recommendation_ALSDALImpl_cDALI
     auto pItem = itemsPartialResultLocal->get(training::outputOfStep4ForStep1)->getFactors();
     // auto pItemIndices = itemsPartialResultsMaster[i]->get(training::outputOfStep4ForStep1)->getIndices();
 
+    std::cout << "\n=== Results for Rank " << rankId << "===\n" << std::endl;    
     printNumericTable(pUser, "User Factors:");
     printNumericTable(pItem, "Item Factors:");
+    std::cout << "User Offset: " << getOffsetFromOffsetTable(userOffset) << std::endl;
+    std::cout << "Item Offset: " << getOffsetFromOffsetTable(itemOffset) << std::endl;
 
-    if (rankId == ccl_root) {
-        for (int i = 0; i < nBlocks; i++) {
-            printNumericTable(NumericTable::cast((*userOffsetsOnMaster)[i]), "userOffsetsOnMaster");
-        }        
+    // printNumericTable(userOffset, "userOffset");
+    // printNumericTable(itemOffset, "itemOffset");
 
-        for (int i = 0; i < nBlocks; i++) {
-            printNumericTable(NumericTable::cast((*itemOffsetsOnMaster)[i]), "itemOffsetsOnMaster");
-        }        
-    }
+    // if (rankId == ccl_root) {
+    //     for (int i = 0; i < nBlocks; i++) {
+    //         printNumericTable(NumericTable::cast((*userOffsetsOnMaster)[i]), "userOffsetsOnMaster");
+    //     }        
+
+    //     for (int i = 0; i < nBlocks; i++) {
+    //         printNumericTable(NumericTable::cast((*itemOffsetsOnMaster)[i]), "itemOffsetsOnMaster");
+    //     }        
+    // }
     
 //    printf("native pUser %ld, pItem %ld", (jlong)&pUser, (jlong)&pItem);
 
@@ -541,36 +557,14 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_recommendation_ALSDALImpl_cDALI
     env->SetLongField(resultObj, cUsersFactorsNumTabField, (jlong)retUser);
     env->SetLongField(resultObj, cItemsFactorsNumTabField, (jlong)retItem);
 
-    // Fill in cUserOffsetsOnMaster & cItemOffsetsOnMaster
-    if (rankId == ccl_root) {
-        jfieldID cUserOffsetsOnMasterField = env->GetFieldID(clazz, "cUserOffsetsOnMaster", "[J");
-        assert(cUserOffsetsOnMasterField != NULL);
+    // Fill in cUserOffset & cItemOffset    
+    jfieldID cUserOffsetField = env->GetFieldID(clazz, "cUserOffset", "J");
+    assert(cUserOffsetField != NULL);
+    env->SetLongField(resultObj, cUserOffsetField, (jlong)getOffsetFromOffsetTable(userOffset));
 
-        jobject mvdataUser = env->GetObjectField(resultObj, cUserOffsetsOnMasterField);
-        assert(mvdataUser != NULL);
-
-        jlongArray arrUser = static_cast<jlongArray>(mvdataUser);
-        long * dataUserOffsets = env->GetLongArrayElements(arrUser, NULL);
-        assert(dataUserOffsets != NULL);
-
-        jfieldID cItemOffsetsOnMasterField = env->GetFieldID(clazz, "cItemOffsetsOnMaster", "[J");
-        assert(cItemOffsetsOnMasterField != NULL);
-
-        jobject mvdataItem = env->GetObjectField(resultObj, cItemOffsetsOnMasterField);
-        jlongArray arrItem = static_cast<jlongArray>(mvdataItem);
-        long * dataItemOffsets = env->GetLongArrayElements(arrItem, NULL);
-        assert(dataItemOffsets != NULL);
-
-        for (int i = 0; i < nBlocks; i++) {
-            NumericTablePtr *retUserOffsets = new NumericTablePtr(NumericTable::cast((*userOffsetsOnMaster)[i]));
-            NumericTablePtr *retItemOffsets = new NumericTablePtr(NumericTable::cast((*itemOffsetsOnMaster)[i]));
-            dataUserOffsets[i] = (jlong)retUserOffsets;
-            dataItemOffsets[i] = (jlong)retItemOffsets;
-        }
-        
-        env->ReleaseLongArrayElements(arrUser, dataUserOffsets, 0);
-        env->ReleaseLongArrayElements(arrItem, dataItemOffsets, 0);
-    }
+    jfieldID cItemOffsetField = env->GetFieldID(clazz, "cItemOffset", "J");
+    assert(cItemOffsetField != NULL);
+    env->SetLongField(resultObj, cItemOffsetField, (jlong)getOffsetFromOffsetTable(itemOffset));
 
     return 0;
 }

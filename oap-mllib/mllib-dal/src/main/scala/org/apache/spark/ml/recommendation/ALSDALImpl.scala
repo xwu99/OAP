@@ -177,8 +177,6 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
 
     val executorIPAddress = Utils.sparkFirstExecutorIP(data.sparkContext)
 
-
-
 //    val dataForConversion = if (data.getNumPartitions < executorNum) {
 //      data.repartition(executorNum).setName("Repartitioned for conversion").cache()
 //    } else {
@@ -232,9 +230,9 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
 
       OneCCL.init(executorNum, executorIPAddress, OneCCL.KVS_PORT)
 
-      println("nUsers", nVectors)
+      println("nUsers", nVectors, "nItems", nFeatures)
 
-      val result = new ALSResult(nBlocks)
+      val result = new ALSResult()
       cDALImplictALS(
         table.getCNumericTable, nUsers = nVectors,
         rank, maxIter, regParam, alpha,
@@ -245,20 +243,11 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
       Iterator(result)
     }.cache()
 
-    results.foreach { p =>
-//      val usersFactorsNumTab = OneDAL.makeNumericTable(p.cUsersFactorsNumTab)
-//      println("foreach", p.cUsersFactorsNumTab, p.cItemsFactorsNumTab)
-      println("result", p.rankId);
-      if (p.rankId == 0) {
-        for (i <- 0 until nBlocks) {
-          val userOffsetTab = OneDAL.makeNumericTable(p.cUserOffsetsOnMaster(i))
-          val itemOffsetTab = OneDAL.makeNumericTable(p.cItemOffsetsOnMaster(i))
-          Service.printNumericTable("cUserOffsetsOnMaster " + i, userOffsetTab)
-          Service.printNumericTable("cItemOffsetsOnMaster " + i, itemOffsetTab)
-        }
-      }
-
-    }
+//    results.foreach { p =>
+////      val usersFactorsNumTab = OneDAL.makeNumericTable(p.cUsersFactorsNumTab)
+////      println("foreach", p.cUsersFactorsNumTab, p.cItemsFactorsNumTab)
+//      println("result", p.rankId, p.cUserOffset, p.cItemOffset);
+//    }
 
 //    val usersFactorsRDD = results.mapPartitionsWithIndex { (index: Int, partiton: Iterator[ALSResult]) =>
 //      partiton.foreach { p =>
@@ -270,6 +259,7 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
 
     val usersFactorsRDD = results.mapPartitionsWithIndex { (index: Int, partiton: Iterator[ALSResult]) =>
       val ret = partiton.flatMap { p =>
+        val userOffset = p.cUserOffset
         val usersFactorsNumTab = OneDAL.makeNumericTable(p.cUsersFactorsNumTab)
         val nRows = usersFactorsNumTab.getNumberOfRows.toInt
         val nCols = usersFactorsNumTab.getNumberOfColumns.toInt
@@ -279,7 +269,7 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
         (0 until nRows).map { index =>
           val array = Array.fill(nCols){0.0f}
           buffer.get(array, 0, nCols)
-          (index.asInstanceOf[ID], array)
+          ((index+userOffset).asInstanceOf[ID], array)
         }.toIterator
       }
       ret
@@ -287,6 +277,7 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
 
     val itemsFactorsRDD = results.mapPartitionsWithIndex { (index: Int, partiton: Iterator[ALSResult]) =>
       val ret = partiton.flatMap { p =>
+        val itemOffset = p.cItemOffset
         val itemsFactorsNumTab = OneDAL.makeNumericTable(p.cItemsFactorsNumTab)
         val nRows = itemsFactorsNumTab.getNumberOfRows.toInt
         val nCols = itemsFactorsNumTab.getNumberOfColumns.toInt
@@ -296,7 +287,7 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
         (0 until nRows).map { index =>
           val array = Array.fill(nCols){0.0f}
           buffer.get(array, 0, nCols)
-          (index.asInstanceOf[ID], array)
+          ((index+itemOffset).asInstanceOf[ID], array)
         }.toIterator
       }
       ret
@@ -305,13 +296,13 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
     usersFactorsRDD.count()
     itemsFactorsRDD.count()
 
-//    usersFactorsRDD.foreach { case (id, array) =>
-//        println("usersFactorsRDD", id, array.mkString(", "))
-//    }
-//
-//    itemsFactorsRDD.foreach { case (id, array) =>
-//      println("itemsFactorsRDD", id, array.mkString(", "))
-//    }
+    usersFactorsRDD.foreach { case (id, array) =>
+        println("usersFactorsRDD", id, array.mkString(", "))
+    }
+
+    itemsFactorsRDD.foreach { case (id, array) =>
+      println("itemsFactorsRDD", id, array.mkString(", "))
+    }
 
     (usersFactorsRDD, itemsFactorsRDD)
   }
