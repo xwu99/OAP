@@ -15,16 +15,16 @@ import scala.collection.mutable.ArrayBuffer
 //import java.nio.DoubleBuffer
 import java.nio.FloatBuffer
 
-class ALSDataPartitioner(partitions: Int, itemsInBlock: Long)
+class ALSDataPartitioner(blocks: Int, itemsInBlock: Long)
   extends Partitioner {
-  def numPartitions: Int = partitions
+  def numPartitions: Int = blocks
   def getPartition(key: Any): Int = {
     val k = key.asInstanceOf[Long]
-    (k / itemsInBlock).toInt
-//    if (k < 15)
-//      (k / 5).toInt
-//    else
-//      3
+    // itemsInBlock = numItems / partitions
+    // remaining records will belog to the last partition
+    // 21 => 5, 5, 5, 6
+    // 46 => 11, 11, 11, 13
+    math.min((k / itemsInBlock).toInt, blocks-1)
   }
 }
 
@@ -67,8 +67,8 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
 
 //    val rowSortedRatings = ratings.sortBy(_.user.toString.toLong)
 
-    val itemsInBlock = (nFeatures + nBlocks - 1) / nBlocks
 //    val itemsInBlock = (nFeatures + nBlocks - 1) / nBlocks
+    val itemsInBlock = nFeatures / nBlocks
 //    val rowSortedGrouped = rowSortedRatings.groupBy(value => value.user.toString.toLong / itemsInBlock).flatMap(_._2)
     val rowSortedGrouped = ratings
       // Transpose the dataset
