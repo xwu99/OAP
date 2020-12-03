@@ -715,6 +715,8 @@ class ALS(@Since("1.4.0") override val uid: String) extends Estimator[ALSModel] 
       checkpointInterval = $(checkpointInterval), seed = $(seed))
     val userDF = userFactors.toDF("id", "features")
     val itemDF = itemFactors.toDF("id", "features")
+    userDF.printSchema()
+    itemDF.printSchema()
     val model = new ALSModel(uid, $(rank), userDF, itemDF).setBlockSize($(blockSize))
       .setParent(this)
     copyValues(model)

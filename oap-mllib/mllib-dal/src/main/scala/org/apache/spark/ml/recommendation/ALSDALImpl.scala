@@ -81,7 +81,9 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
         p.toArray.sortBy(_.user.toString.toLong).toIterator
       }
 
-//    rowSortedGrouped.mapPartitionsWithIndex { case (partitionId, partition) =>
+    println("rowSortedGrouped partition number: ",  rowSortedGrouped.getNumPartitions)
+
+    //    rowSortedGrouped.mapPartitionsWithIndex { case (partitionId, partition) =>
 //        println("partitionId", partitionId)
 //        partition.foreach { p =>
 //          println(p.user, p.item, p.rating) }
@@ -125,9 +127,9 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
 
       println("PartitionId:", partitionId)
       println("csrRowNum", csrRowNum)
-      println("rowOffsets", rowOffsets.mkString(","))
-      println("columnIndices", columnIndices.mkString(","))
-      println("values", values.mkString(","))
+//      println("rowOffsets", rowOffsets.mkString(","))
+//      println("columnIndices", columnIndices.mkString(","))
+//      println("values", values.mkString(","))
 
       val contextLocal = new DaalContext()
 
@@ -177,15 +179,20 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
 
     val executorIPAddress = Utils.sparkFirstExecutorIP(data.sparkContext)
 
-//    val dataForConversion = if (data.getNumPartitions < executorNum) {
-//      data.repartition(executorNum).setName("Repartitioned for conversion").cache()
-//    } else {
-//      data
-//    }
+    val dataForCoalesce = if (data.getNumPartitions < executorNum) {
+      data.repartition(executorNum).setName("Repartitioned for conversion").cache()
+    } else {
+      data
+    }
 //    println("data.getNumPartitions", data.getNumPartitions)
 
+//    val dataForConversion = dataForCoalesce.coalesce(1,
+//          partitionCoalescer = Some(new ExecutorInProcessCoalescePartitioner()))
+    val dataForConversion = dataForCoalesce
+    dataForConversion.count()
+
 //    val numericTables = ratingsToCSRNumericTables(dataForConversion, nRatings, nVectors, nFeatures, nBlocks)
-    val numericTables = ratingsToCSRNumericTables(data, nRatings, nVectors, nFeatures, nBlocks)
+    val numericTables = ratingsToCSRNumericTables(dataForConversion, nRatings, nVectors, nFeatures, nBlocks)
     val results = numericTables.mapPartitionsWithIndex { (index, iter) =>
       val table = iter.next()
       val context = new DaalContext()
@@ -274,7 +281,7 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
         }.toIterator
       }
       ret
-    }.cache()
+    }.setName("userFactors").cache()
 
     val itemsFactorsRDD = results.mapPartitionsWithIndex { (index: Int, partiton: Iterator[ALSResult]) =>
       val ret = partiton.flatMap { p =>
@@ -292,18 +299,18 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
         }.toIterator
       }
       ret
-    }.cache()
+    }.setName("itemFactors").cache()
 
     usersFactorsRDD.count()
     itemsFactorsRDD.count()
 
-    usersFactorsRDD.foreach { case (id, array) =>
-        println("usersFactorsRDD", id, array.mkString(", "))
-    }
-
-    itemsFactorsRDD.foreach { case (id, array) =>
-      println("itemsFactorsRDD", id, array.mkString(", "))
-    }
+//    usersFactorsRDD.foreach { case (id, array) =>
+//        println("usersFactorsRDD", id, array.mkString(", "))
+//    }
+//
+//    itemsFactorsRDD.foreach { case (id, array) =>
+//      println("itemsFactorsRDD", id, array.mkString(", "))
+//    }
 
     (usersFactorsRDD, itemsFactorsRDD)
   }

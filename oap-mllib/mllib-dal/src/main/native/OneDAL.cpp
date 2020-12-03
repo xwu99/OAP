@@ -169,7 +169,7 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_util_OneDAL_00024_cNewCSRNumeri
 
     CSRNumericTablePtr *ret = new CSRNumericTablePtr(numericTable);
 
-    printNumericTable(*ret, "cNewCSRNumericTable");    
+    //printNumericTable(*ret, "cNewCSRNumericTable", 10);
 
     return (jlong)ret;
 }
