@@ -24,10 +24,10 @@
 #include <gandiva/node.h>
 #include <gandiva/tree_expr_builder.h>
 
+#include "codegen/arrow_compute/ext/array_item_index.h"
 #include "codegen/arrow_compute/ext/codegen_context.h"
 #include "codegen/common/hash_relation.h"
 #include "codegen/common/result_iterator.h"
-#include "codegen/arrow_compute/ext/array_item_index.h"
 
 using ArrayList = std::vector<std::shared_ptr<arrow::Array>>;
 
@@ -132,23 +132,23 @@ class EncodeArrayKernel : public KernalBase {
   arrow::compute::FunctionContext* ctx_;
 };
 
-
 class WindowAggregateFunctionKernel : public KernalBase {
  public:
   class ActionFactory;
-  WindowAggregateFunctionKernel(arrow::compute::FunctionContext* ctx,
-                                std::vector<std::shared_ptr<arrow::DataType>> type_list,
-                                std::shared_ptr<arrow::DataType> result_type,
-                                std::vector<std::shared_ptr<arrow::Int32Array>> accumulated_group_ids,
-                                std::shared_ptr<ActionFactory> action);
+  WindowAggregateFunctionKernel(
+      arrow::compute::FunctionContext* ctx,
+      std::vector<std::shared_ptr<arrow::DataType>> type_list,
+      std::shared_ptr<arrow::DataType> result_type,
+      std::vector<std::shared_ptr<arrow::Int32Array>> accumulated_group_ids,
+      std::shared_ptr<ActionFactory> action);
   static arrow::Status Make(arrow::compute::FunctionContext* ctx,
                             std::string function_name,
                             std::vector<std::shared_ptr<arrow::DataType>> type_list,
                             std::shared_ptr<arrow::DataType> result_type,
                             std::shared_ptr<KernalBase>* out);
-  arrow::Status Evaluate(const ArrayList &in) override;
+  arrow::Status Evaluate(const ArrayList& in) override;
   arrow::Status Finish(ArrayList* out) override;
-  template<typename ArrowType>
+  template <typename ArrowType>
   arrow::Status Finish0(ArrayList* out);
 
  private:
@@ -306,13 +306,20 @@ class StddevSampFinalArrayKernel : public KernalBase {
 class SortArraysToIndicesKernel : public KernalBase {
  public:
   static arrow::Status Make(arrow::compute::FunctionContext* ctx,
-                            std::vector<std::shared_ptr<arrow::Field>> key_field_list,
                             std::shared_ptr<arrow::Schema> result_schema,
-                            std::shared_ptr<KernalBase>* out, bool nulls_first, bool asc);
+                            gandiva::NodeVector sort_key_node,
+                            std::vector<std::shared_ptr<arrow::Field>> key_field_list,
+                            std::vector<bool> sort_directions,
+                            std::vector<bool> nulls_order,
+                            bool NaN_check,
+                            std::shared_ptr<KernalBase>* out);
   SortArraysToIndicesKernel(arrow::compute::FunctionContext* ctx,
-                            std::vector<std::shared_ptr<arrow::Field>> key_field_list,
                             std::shared_ptr<arrow::Schema> result_schema,
-                            bool nulls_first, bool asc);
+                            gandiva::NodeVector sort_key_node,
+                            std::vector<std::shared_ptr<arrow::Field>> key_field_list,
+                            std::vector<bool> sort_directions,
+                            std::vector<bool> nulls_order,
+                            bool NaN_check);
   arrow::Status Evaluate(const ArrayList& in) override;
   arrow::Status MakeResultIterator(
       std::shared_ptr<arrow::Schema> schema,
@@ -333,9 +340,9 @@ class WindowSortKernel : public KernalBase {
                             std::shared_ptr<arrow::Schema> result_schema,
                             std::shared_ptr<KernalBase>* out, bool nulls_first, bool asc);
   WindowSortKernel(arrow::compute::FunctionContext* ctx,
-                            std::vector<std::shared_ptr<arrow::Field>> key_field_list,
-                            std::shared_ptr<arrow::Schema> result_schema,
-                            bool nulls_first, bool asc);
+                   std::vector<std::shared_ptr<arrow::Field>> key_field_list,
+                   std::shared_ptr<arrow::Schema> result_schema, bool nulls_first,
+                   bool asc);
   arrow::Status Evaluate(const ArrayList& in) override;
   std::string GetSignature() override;
 
@@ -374,22 +381,23 @@ class WindowRankKernel : public KernalBase {
  public:
   WindowRankKernel(arrow::compute::FunctionContext* ctx,
                    std::vector<std::shared_ptr<arrow::DataType>> type_list,
-                   std::shared_ptr<WindowSortKernel::Impl> sorter,
-                   bool desc);
+                   std::shared_ptr<WindowSortKernel::Impl> sorter, bool desc);
   static arrow::Status Make(arrow::compute::FunctionContext* ctx,
                             std::string function_name,
                             std::vector<std::shared_ptr<arrow::DataType>> type_list,
-                            std::shared_ptr<KernalBase>* out,
-                            bool desc);
-  arrow::Status Evaluate(const ArrayList &in) override;
+                            std::shared_ptr<KernalBase>* out, bool desc);
+  arrow::Status Evaluate(const ArrayList& in) override;
   arrow::Status Finish(ArrayList* out) override;
 
   arrow::Status SortToIndicesPrepare(std::vector<ArrayList> values);
-  arrow::Status SortToIndicesFinish(std::vector<std::shared_ptr<ArrayItemIndex>> elements_to_sort,
-                                    std::vector<std::shared_ptr<ArrayItemIndex>>* offsets);
+  arrow::Status SortToIndicesFinish(
+      std::vector<std::shared_ptr<ArrayItemIndex>> elements_to_sort,
+      std::vector<std::shared_ptr<ArrayItemIndex>>* offsets);
 
-  template<typename ArrayType>
-  arrow::Status AreTheSameValue(std::vector<ArrayList> values, int column, std::shared_ptr<ArrayItemIndex> i, std::shared_ptr<ArrayItemIndex> j, bool* out);
+  template <typename ArrayType>
+  arrow::Status AreTheSameValue(std::vector<ArrayList> values, int column,
+                                std::shared_ptr<ArrayItemIndex> i,
+                                std::shared_ptr<ArrayItemIndex> j, bool* out);
 
  private:
   std::shared_ptr<WindowSortKernel::Impl> sorter_;
@@ -521,6 +529,30 @@ class HashRelationKernel : public KernalBase {
   std::unique_ptr<Impl> impl_;
   arrow::compute::FunctionContext* ctx_;
 };
+class ConcatArrayListKernel : public KernalBase {
+ public:
+  static arrow::Status Make(
+      arrow::compute::FunctionContext* ctx,
+      const std::vector<std::shared_ptr<arrow::Field>>& input_field_list,
+      std::shared_ptr<gandiva::Node> root_node,
+      const std::vector<std::shared_ptr<arrow::Field>>& output_field_list,
+      std::shared_ptr<KernalBase>* out);
+  ConcatArrayListKernel(
+      arrow::compute::FunctionContext* ctx,
+      const std::vector<std::shared_ptr<arrow::Field>>& input_field_list,
+      std::shared_ptr<gandiva::Node> root_node,
+      const std::vector<std::shared_ptr<arrow::Field>>& output_field_list);
+  arrow::Status Evaluate(const ArrayList& in) override;
+  arrow::Status MakeResultIterator(
+      std::shared_ptr<arrow::Schema> schema,
+      std::shared_ptr<ResultIterator<arrow::RecordBatch>>* out) override;
+
+  class Impl;
+
+ private:
+  std::unique_ptr<Impl> impl_;
+  arrow::compute::FunctionContext* ctx_;
+};
 class ConditionedProbeKernel : public KernalBase {
  public:
   static arrow::Status Make(arrow::compute::FunctionContext* ctx,
@@ -530,6 +562,7 @@ class ConditionedProbeKernel : public KernalBase {
                             const gandiva::NodeVector& right_schema_list,
                             const gandiva::NodePtr& condition, int join_type,
                             const gandiva::NodeVector& result_schema,
+                            const gandiva::NodeVector& hash_configuration_list,
                             int hash_relation_idx, std::shared_ptr<KernalBase>* out);
   ConditionedProbeKernel(arrow::compute::FunctionContext* ctx,
                          const gandiva::NodeVector& left_key_list,
@@ -537,7 +570,9 @@ class ConditionedProbeKernel : public KernalBase {
                          const gandiva::NodeVector& left_schema_list,
                          const gandiva::NodeVector& right_schema_list,
                          const gandiva::NodePtr& condition, int join_type,
-                         const gandiva::NodeVector& result_schema, int hash_relation_idx);
+                         const gandiva::NodeVector& result_schema,
+                         const gandiva::NodeVector& hash_configuration_list,
+                         int hash_relation_idx);
   arrow::Status MakeResultIterator(
       std::shared_ptr<arrow::Schema> schema,
       std::shared_ptr<ResultIterator<arrow::RecordBatch>>* out) override;
@@ -589,6 +624,21 @@ class FilterKernel : public KernalBase {
                           std::shared_ptr<CodeGenContext>* codegen_ctx,
                           int* var_id) override;
   std::string GetSignature() override;
+  class Impl;
+
+ private:
+  std::unique_ptr<Impl> impl_;
+  arrow::compute::FunctionContext* ctx_;
+};
+class ConcatArrayKernel : public KernalBase {
+ public:
+  static arrow::Status Make(arrow::compute::FunctionContext* ctx,
+                            std::vector<std::shared_ptr<arrow::DataType>> type_list,
+                            std::shared_ptr<KernalBase>* out);
+  ConcatArrayKernel(arrow::compute::FunctionContext* ctx,
+                    std::vector<std::shared_ptr<arrow::DataType>> type_list);
+  arrow::Status Evaluate(const ArrayList& in,
+                         std::shared_ptr<arrow::Array>* out) override;
   class Impl;
 
  private:

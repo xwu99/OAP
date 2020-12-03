@@ -277,13 +277,31 @@ function prepare_intel_arrow() {
   check_gcc
 
   cd cpp/release-build
-  cmake -DCMAKE_BUILD_TYPE=Release -DARROW_PLASMA_JAVA_CLIENT=on -DARROW_PLASMA=on -DARROW_DEPENDENCY_SOURCE=BUNDLED -DARROW_GANDIVA_JAVA=ON -DARROW_GANDIVA=ON -DARROW_PARQUET=ON -DARROW_HDFS=ON -DARROW_BOOST_USE_SHARED=ON -DARROW_JNI=ON -DARROW_WITH_SNAPPY=ON -DARROW_FILESYSTEM=ON -DARROW_JSON=ON -DARROW_WITH_PROTOBUF=ON -DARROW_DATASET=ON DARROW_WITH_LZ4 ..
+  cmake -DCMAKE_BUILD_TYPE=Release -DARROW_PLASMA_JAVA_CLIENT=on -DARROW_PLASMA=on -DARROW_DEPENDENCY_SOURCE=BUNDLED -DARROW_GANDIVA_JAVA=ON -DARROW_GANDIVA=ON -DARROW_PARQUET=ON -DARROW_HDFS=ON -DARROW_BOOST_USE_SHARED=ON -DARROW_JNI=ON -DARROW_WITH_SNAPPY=ON -DARROW_FILESYSTEM=ON -DARROW_JSON=ON -DARROW_WITH_PROTOBUF=ON -DARROW_DATASET=ON -DARROW_WITH_LZ4=ON ..
   make -j
   make install
   cd ../../java
   mvn clean install -q -P arrow-jni -am -Darrow.cpp.build.dir=$current_arrow_path/cpp/release-build/release/ -DskipTests -Dcheckstyle.skip
 }
 
+
+function prepare_intel_conda_arrow() {
+  cd $DEV_PATH
+  mkdir -p $DEV_PATH/thirdparty/
+  cd $DEV_PATH/thirdparty/
+  intel_arrow_repo="https://github.com/Intel-bigdata/arrow.git"
+  if [ ! -d "arrow" ]; then
+    git clone $intel_arrow_repo -b branch-0.17.0-oap-0.9
+    cd arrow
+  else
+    cd arrow
+    git pull
+  fi
+  current_arrow_path=$(pwd)
+
+  cd java/
+  mvn clean install -q -P arrow-jni -am -Darrow.cpp.build.dir=/root/miniconda2/envs/oapbuild/lib -DskipTests -Dcheckstyle.skip
+}
 
 
 function prepare_libfabric() {
@@ -389,6 +407,15 @@ function prepare_oneAPI() {
   sudo sh install-build-deps-centos.sh
 }
 
+function  prepare_conda_build() {
+  prepare_maven
+  prepare_memkind
+  prepare_cmake
+  prepare_vmemcache
+  prepare_intel_conda_arrow
+  prepare_PMoF
+  prepare_oneAPI
+}
 
 function  prepare_all() {
   prepare_maven
@@ -422,6 +449,12 @@ case $key in
     shift 1 
     echo "Start to install all compile-time dependencies for OAP ..."
     prepare_all
+    exit 0
+    ;;
+    --prepare_conda_build)
+    shift 1
+    echo "Start to install all conda compile-time dependencies for OAP ..."
+    prepare_conda_build
     exit 0
     ;;
     --prepare_maven)

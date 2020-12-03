@@ -79,6 +79,7 @@ class ColumnarAggregation(
   var rowId: Int = 0
   var processedNumRows: Int = 0
   var result_iterator: BatchIterator = _
+  val hashCollisionCheck: Int = if (ColumnarPluginConfig.getConf.hashCompare) 1 else 0
 
   logInfo(
     s"\ngroupingExpressions: $groupingExpressions,\noriginalInputAttributes: $originalInputAttributes,\naggregateExpressions: $aggregateExpressions,\naggregateAttributes: $aggregateAttributes,\nresultExpressions: $resultExpressions, \noutput: $output")
@@ -102,7 +103,7 @@ class ColumnarAggregation(
     Field.nullable(s"${attr.name}#${attr.exprId.id}", CodeGeneration.getResultType(attr.dataType))
   })
   val groupingNativeExpression: List[ColumnarAggregateExpressionBase] = groupingFieldList.map(field => {
-    new ColumnarUniqueAggregateExpression(List(field)).asInstanceOf[ColumnarAggregateExpressionBase]
+    new ColumnarUniqueAggregateExpression(List(field), hashCollisionCheck).asInstanceOf[ColumnarAggregateExpressionBase]
   })
 
   // 3. map original input to aggregate input
@@ -135,7 +136,8 @@ class ColumnarAggregation(
           expr.aggregateFunction,
           expr.mode,
           expr.isDistinct,
-          expr.resultId)
+          expr.resultId,
+          hashCollisionCheck)
         val arg_size = res.requiredColNum
         val internalExpressionList = expr.aggregateFunction.children
         val ordinalList = ColumnarProjection.binding(originalInputAttributes, internalExpressionList, index, skipLiteral = true)
@@ -165,7 +167,8 @@ class ColumnarAggregation(
           expr.aggregateFunction,
           expr.mode,
           expr.isDistinct,
-          expr.resultId)
+          expr.resultId,
+          hashCollisionCheck)
         val arg_size = res.requiredColNum
         val ordinalList = (non_partial_field_id until (non_partial_field_id + arg_size)).map(i => nonPartialProjectOrdinalList(i))
         non_partial_field_id += arg_size
@@ -469,12 +472,15 @@ class ColumnarAggregation(
       var data_loaded = false
       var nextBatch = true
       var eval_elapse: Long = 0
+      var noNext: Boolean = false
 
       override def hasNext: Boolean = {
+        if (noNext) return false
         if (nextCalled == false && resultColumnarBatch != null) {
           return true
         }
         if (!nextBatch) {
+          noNext = true
           return false
         }
 
@@ -507,6 +513,7 @@ class ColumnarAggregation(
         if (resultColumnarBatch.numRows == 0) {
           resultColumnarBatch.close()
           logInfo(s"Aggregation completed, total output ${numOutputRows} rows, ${numOutputBatches} batches")
+          noNext = true
           return false
         }
         numOutputBatches += 1

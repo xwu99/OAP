@@ -26,7 +26,7 @@ import org.apache.parquet.hadoop._
 
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow
-import org.apache.spark.sql.execution.datasources.RecordReader
+import org.apache.spark.sql.execution.datasources.{PartitionedFile, RecordReader}
 import org.apache.spark.sql.execution.datasources.oap.filecache._
 import org.apache.spark.sql.execution.datasources.parquet.ParquetReadSupportWrapper
 import org.apache.spark.sql.internal.oap.OapConf
@@ -67,14 +67,18 @@ private[oap] case class ParquetDataFile(
     configuration: Configuration) extends DataFile {
 
   private var context: Option[ParquetVectorizedContext] = None
+  private var partitionedFile: PartitionedFile = null
   private lazy val meta =
     OapRuntime.getOrCreate.dataFileMetaCacheManager.get(this).asInstanceOf[ParquetDataFileMeta]
   private val file = new Path(StringUtils.unEscapeString(path))
   private val parquetDataCacheEnable =
-    configuration.getBoolean(OapConf.OAP_PARQUET_DATA_CACHE_ENABLED.key,
-      OapConf.OAP_PARQUET_DATA_CACHE_ENABLED.defaultValue.get) ||
+    if (configuration.getTrimmed(OapConf.OAP_PARQUET_DATA_CACHE_ENABLED.key) != null ) {
+      configuration.getBoolean(OapConf.OAP_PARQUET_DATA_CACHE_ENABLED.key,
+        OapConf.OAP_PARQUET_DATA_CACHE_ENABLED.defaultValue.get)
+    } else {
       configuration.getBoolean(OapConf.OAP_PARQUET_DATA_CACHE_ENABLE.key,
         OapConf.OAP_PARQUET_DATA_CACHE_ENABLE.defaultValue.get)
+    }
 
   private var fiberDataReader: ParquetFiberDataReader = _
 
@@ -120,7 +124,7 @@ private[oap] case class ParquetDataFile(
           addRequestSchemaToConf(configuration, requiredIds)
           initCacheReader(requiredIds, c,
             new VectorizedCacheReader(configuration,
-              meta.footer.toParquetMetadata(), this, requiredIds))
+              meta.footer.toParquetMetadata(), this, requiredIds, partitionedFile))
         } else {
           addRequestSchemaToConf(configuration, requiredIds)
           initVectorizedReader(c,
@@ -171,6 +175,9 @@ private[oap] case class ParquetDataFile(
 
   def setParquetVectorizedContext(context: Option[ParquetVectorizedContext]): Unit =
     this.context = context
+
+  def setPartitionedFile(file: PartitionedFile): Unit =
+    this.partitionedFile = file
 
   private def initRecordReader(reader: RecordReader[InternalRow]) = {
     reader.initialize()

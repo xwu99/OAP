@@ -34,12 +34,14 @@ INCS := -I $(JAVA_HOME)/include \
 LIBS := -L${CCL_ROOT}/lib -l:libccl.a \
         -L$(DAALROOT)/lib/intel64 -l:libdaal_core.a -l:libdaal_thread.a \
         -L$(TBBROOT)/lib -ltbb -ltbbmalloc
+#        TODO: Add signal chaining support, should fix linking, package so and loading
+#        -L$(JAVA_HOME)/jre/lib/amd64 -ljsig
 
 CPP_SRCS += \
-./OneCCL.cpp ./OneDAL.cpp ./KMeansDALImpl.cpp ./ALSDALImpl.cpp ./service.cpp ./error_handling.cpp
+./OneCCL.cpp ./OneDAL.cpp ./KMeansDALImpl.cpp ./PCADALImpl.cpp ./ALSDALImpl.cpp ./service.cpp ./error_handling.cpp
 
 OBJS += \
-./OneCCL.o ./OneDAL.o ./KMeansDALImpl.o ./ALSDALImpl.o ./service.o ./error_handling.o
+./OneCCL.o ./OneDAL.o ./KMeansDALImpl.o ./PCADALImpl.o ./ALSDALImpl.o ./service.o ./error_handling.o
 
 # Output Binary
 OUTPUT = ../../../target/libMLlibDAL.so

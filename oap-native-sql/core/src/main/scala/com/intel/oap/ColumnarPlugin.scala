@@ -29,7 +29,6 @@ import org.apache.spark.sql.execution.aggregate.HashAggregateExec
 import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
 import org.apache.spark.sql.execution.exchange.{BroadcastExchangeExec, ReusedExchangeExec, ShuffleExchangeExec}
 import org.apache.spark.sql.execution.joins.{BroadcastHashJoinExec, BuildLeft, BuildRight, ShuffledHashJoinExec, SortMergeJoinExec, _}
-import org.apache.spark.sql.types.StringType
 import org.apache.spark.sql.execution.window.WindowExec
 import org.apache.spark.sql.internal.SQLConf
 
@@ -114,9 +113,7 @@ case class ColumnarPreOverrides(conf: SparkConf) extends Rule[SparkPlan] {
       logDebug(s"Columnar Processing for ${plan.getClass} is currently supported.")
       new ColumnarExpandExec(plan.projections, plan.output, children(0))
     case plan: SortExec =>
-      val sortList = {plan.sortOrder.filter(expr => expr.dataType == StringType)}
-      //TODO(Rui): fix sorting on string
-      if (columnarConf.enableColumnarSort && sortList.isEmpty) {
+      if (columnarConf.enableColumnarSort) {
         val child =
           if (nc == null) replaceWithColumnarPlan(plan.child) else nc(0)
         logDebug(s"Columnar Processing for ${plan.getClass} is currently supported.")
@@ -132,16 +129,10 @@ case class ColumnarPreOverrides(conf: SparkConf) extends Rule[SparkPlan] {
         val child = children(0)
         logDebug(s"Columnar Processing for ${plan.getClass} is currently supported.")
         if (SQLConf.get.adaptiveExecutionEnabled) {
-          val exchange =
-            new ColumnarShuffleExchangeExec(
-              plan.outputPartitioning,
-              child,
-              plan.canChangeNumPartitions)
-          if (ColumnarShuffleExchangeExec.exchanges.contains(plan)) {
-            logWarning(s"Found not reused ColumnarShuffleExchange " + exchange.treeString)
-          }
-          ColumnarShuffleExchangeExec.exchanges.update(plan, exchange)
-          exchange
+          new ColumnarShuffleExchangeExec(
+            plan.outputPartitioning,
+            child,
+            plan.canChangeNumPartitions)
         } else {
           CoalesceBatchesExec(
             new ColumnarShuffleExchangeExec(
@@ -248,7 +239,7 @@ case class ColumnarPreOverrides(conf: SparkConf) extends Rule[SparkPlan] {
           return child
         }
       }
-      if (columnarConf.enableColumnarSortMergeJoin ) {
+      if (columnarConf.enableColumnarSortMergeJoin) {
         val left = replaceWithColumnarPlan(plan.left)
         val right = replaceWithColumnarPlan(plan.right)
         logDebug(s"Columnar Processing for ${plan.getClass} is currently supported.")
@@ -539,7 +530,7 @@ case class ColumnarPreOverrides(conf: SparkConf) extends Rule[SparkPlan] {
             }
           case _ =>
             replaceWithColumnarPlan(child)
-        })
+      })
     }
   }
 }
@@ -551,13 +542,6 @@ case class ColumnarPostOverrides(conf: SparkConf) extends Rule[SparkPlan] {
     case plan: RowToColumnarExec =>
       val child = replaceWithColumnarPlan(plan.child)
       RowToArrowColumnarExec(child)
-    case ReusedExchangeExec(id, s: ShuffleExchangeExec)
-        if SQLConf.get.adaptiveExecutionEnabled && columnarConf.enableColumnarShuffle =>
-      val exchange = ColumnarShuffleExchangeExec.exchanges.get(s) match {
-        case Some(e) => e
-        case None => throw new IllegalStateException("Reused exchange operator not found.")
-      }
-      ReusedExchangeExec(id, exchange)
     case ColumnarToRowExec(child: ColumnarShuffleExchangeExec)
         if SQLConf.get.adaptiveExecutionEnabled && columnarConf.enableColumnarShuffle =>
       // When AQE enabled, we need to discard ColumnarToRowExec to avoid extra transactions

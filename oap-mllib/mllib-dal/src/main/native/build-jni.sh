@@ -2,7 +2,7 @@
 
 WORK_DIR="$( cd $( dirname "${BASH_SOURCE[0]}" ) && pwd )"
 
-DAAL_JAR=${ONEAPI_ROOT}/daal/latest/lib/daal.jar
+DAAL_JAR=${ONEAPI_ROOT}/dal/latest/lib/onedal.jar
 
 if [ ! -f "$DAAL_JAR" ]; then
     echo $DAAL_JAR does not exist!
@@ -18,4 +18,6 @@ javah -d $WORK_DIR/javah -classpath "$WORK_DIR/../../../target/classes:$DAAL_JAR
     org.apache.spark.ml.util.OneCCL$ \
     org.apache.spark.ml.util.OneDAL$ \
     org.apache.spark.ml.clustering.KMeansDALImpl \
+    org.apache.spark.ml.feature.PCADALImpl \
     org.apache.spark.ml.recommendation.ALSDALImpl
+

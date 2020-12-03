@@ -70,7 +70,11 @@ public final class LibLoader {
      * so this function should be called after oneDAL loadLibrary
      */
     public static synchronized void loadLibMLlibDAL() throws IOException {
+        // oneDAL Java API doesn't load correct libtbb version for oneAPI Beta 10
+        // Rename in pom.xml and assembly.xml to workaround.
+        // See https://github.com/oneapi-src/oneDAL/issues/1254 -->
         LibUtils.loadLibrary();
+        
         loadFromJar(subDir, "libMLlibDAL.so");
     }
 
@@ -80,17 +84,17 @@ public final class LibLoader {
      * @param path sub folder (in temporary folder) name
      * @param name library name
      */
-    private static void loadFromJar(String path, String fullName) throws IOException {
-        logger.log(logLevel, "Loading " + fullName + " ...");
+    private static void loadFromJar(String path, String name) throws IOException {
+        logger.log(logLevel, "Loading " + name + " ...");
 
-        File fileOut = createTempFile(path, fullName);
+        File fileOut = createTempFile(path, name);
         // File exists already
         if (fileOut == null) {
             logger.log(logLevel, "DONE: Loading library as resource.");
             return;
         }
 
-        InputStream streamIn = LibLoader.class.getResourceAsStream(LIBRARY_PATH_IN_JAR + "/" + fullName);
+        InputStream streamIn = LibLoader.class.getResourceAsStream(LIBRARY_PATH_IN_JAR + "/" + name);
         if (streamIn == null) {
             throw new IOException("Error: No resource found.");
         }
