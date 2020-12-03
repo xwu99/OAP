@@ -267,7 +267,7 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
 
     val usersFactorsRDD = results.mapPartitionsWithIndex { (index: Int, partiton: Iterator[ALSResult]) =>
       val ret = partiton.flatMap { p =>
-        val userOffset = p.cUserOffset
+        val userOffset = p.cUserOffset.toInt
         val usersFactorsNumTab = OneDAL.makeNumericTable(p.cUsersFactorsNumTab)
         val nRows = usersFactorsNumTab.getNumberOfRows.toInt
         val nCols = usersFactorsNumTab.getNumberOfColumns.toInt
@@ -285,7 +285,7 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
 
     val itemsFactorsRDD = results.mapPartitionsWithIndex { (index: Int, partiton: Iterator[ALSResult]) =>
       val ret = partiton.flatMap { p =>
-        val itemOffset = p.cItemOffset
+        val itemOffset = p.cItemOffset.toInt
         val itemsFactorsNumTab = OneDAL.makeNumericTable(p.cItemsFactorsNumTab)
         val nRows = itemsFactorsNumTab.getNumberOfRows.toInt
         val nCols = itemsFactorsNumTab.getNumberOfColumns.toInt
