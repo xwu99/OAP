@@ -162,7 +162,7 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
 //  }
 
   def run(): (RDD[(ID, Array[Float])], RDD[(ID, Array[Float])]) = {
-    val executorNum = Utils.sparkExecutorNum()
+    val executorNum = Utils.sparkExecutorNum(data.sparkContext)
     val executorCores = Utils.sparkExecutorCores()
 
     val largestItems = data.sortBy(_.item.toString.toLong, ascending = false).take(1)
@@ -179,20 +179,20 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
 
     val executorIPAddress = Utils.sparkFirstExecutorIP(data.sparkContext)
 
-    val dataForCoalesce = if (data.getNumPartitions < executorNum) {
-      data.repartition(executorNum).setName("Repartitioned for conversion").cache()
-    } else {
-      data
-    }
-//    println("data.getNumPartitions", data.getNumPartitions)
-
-//    val dataForConversion = dataForCoalesce.coalesce(1,
-//          partitionCoalescer = Some(new ExecutorInProcessCoalescePartitioner()))
-    val dataForConversion = dataForCoalesce
-    dataForConversion.count()
+//    val dataForCoalesce = if (data.getNumPartitions < executorNum) {
+//      data.repartition(executorNum).setName("Repartitioned for conversion").cache()
+//    } else {
+//      data
+//    }
+////    println("data.getNumPartitions", data.getNumPartitions)
+//
+////    val dataForConversion = dataForCoalesce.coalesce(1,
+////          partitionCoalescer = Some(new ExecutorInProcessCoalescePartitioner()))
+//    val dataForConversion = dataForCoalesce
+//    dataForConversion.count()
 
 //    val numericTables = ratingsToCSRNumericTables(dataForConversion, nRatings, nVectors, nFeatures, nBlocks)
-    val numericTables = ratingsToCSRNumericTables(dataForConversion, nRatings, nVectors, nFeatures, nBlocks)
+    val numericTables = ratingsToCSRNumericTables(data, nRatings, nVectors, nFeatures, nBlocks)
     val results = numericTables.mapPartitionsWithIndex { (index, iter) =>
       val table = iter.next()
       val context = new DaalContext()

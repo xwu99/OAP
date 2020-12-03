@@ -281,8 +281,11 @@ void initializeStep2Local(size_t rankId, size_t partitionId, const KeyValueDataC
 }
 
 void initializeModel(size_t rankId, size_t partitionId, size_t nBlocks, size_t nUsers, size_t nFactors)
-{    
-    std::cout << "initializeModel " << std::endl;
+{
+    std::cout << "ALS (native): initializeModel " << std::endl;
+
+    auto t1 = std::chrono::high_resolution_clock::now();
+
     KeyValueDataCollectionPtr initStep1LocalResult = initializeStep1Local(rankId, partitionId, nBlocks, nUsers, nFactors);
     
     /* MPI_Alltoallv to populate initStep2LocalInput */
@@ -295,6 +298,10 @@ void initializeModel(size_t rankId, size_t partitionId, size_t nBlocks, size_t n
     all2all<NumericTable>(nodeCPs, nBlocks, initStep2LocalInput);
 
     initializeStep2Local(rankId, partitionId, initStep2LocalInput);
+
+    auto t2 = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::seconds>( t2 - t1 ).count();
+    std::cout << "ALS (native): initializeModel took " << duration << " secs" << std::endl;
 }
 
 training::DistributedPartialResultStep1Ptr computeStep1Local(const training::DistributedPartialResultStep4Ptr & partialResultLocal, size_t nFactors)
@@ -363,7 +370,9 @@ training::DistributedPartialResultStep4Ptr computeStep4Local(const CSRNumericTab
 
 void trainModel(size_t rankId, size_t partitionId, size_t nBlocks, size_t nFactors, size_t maxIterations)
 {
-    std::cout << "trainModel" << std::endl;
+    std::cout << "ALS (native): trainModel" << std::endl;
+
+    auto tStart = std::chrono::high_resolution_clock::now();
 
     training::DistributedPartialResultStep1Ptr step1LocalResultsOnMaster[nBlocks];
     training::DistributedPartialResultStep1Ptr step1LocalResult;
@@ -472,6 +481,10 @@ void trainModel(size_t rankId, size_t partitionId, size_t nBlocks, size_t nFacto
         std::cout << "ALS (native): iteration " << iteration << " took " << duration << " secs" << std::endl;
     }
 
+    auto tEnd = std::chrono::high_resolution_clock::now();
+    auto durationTotal = std::chrono::duration_cast<std::chrono::seconds>( tEnd - tStart ).count();
+    std::cout << "ALS (native): trainModel took " << durationTotal << " secs" << std::endl;
+
     /*Gather all itemsPartialResultLocal to itemsPartialResultsMaster on the master and distributing the result over other ranks*/
     // serializeDAALObject(itemsPartialResultLocal.get(), nodeResults);
     // gatherItems(nodeResults, nBlocks);
@@ -507,10 +520,11 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_recommendation_ALSDALImpl_cDALI
     // dataTable.reset(createFloatSparseTable("/home/xiaochang/github/oneDAL-upstream/samples/daal/cpp/mpi/data/distributed/implicit_als_csr_1.csv"));
 
     // printNumericTable(dataTable, "cDALImplictALS", 10);
-    cout << "getNumberOfRows: " << dataTable->getNumberOfRows() << endl;
-    cout << "getNumberOfColumns: " << dataTable->getNumberOfColumns() << endl;
-    cout << "getDataSize: " << dataTable->getDataSize() << endl;
-    cout << "nUsers: " << nUsers << endl;
+    cout << "ALS (native): Input info: " << endl;
+    cout << "- NumberOfRows: " << dataTable->getNumberOfRows() << endl;
+    cout << "- NumberOfColumns: " << dataTable->getNumberOfColumns() << endl;
+    cout << "- DataSize: " << dataTable->getDataSize() << endl;
+    cout << "- fullNUsers: " << nUsers << endl;
 
     // Set number of threads for oneDAL to use for each rank
     services::Environment::getInstance()->setNumberOfThreads(executor_cores);

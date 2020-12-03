@@ -38,7 +38,7 @@ import org.apache.spark.ml.{Estimator, Model}
 import org.apache.spark.ml.linalg.BLAS
 import org.apache.spark.ml.param._
 import org.apache.spark.ml.param.shared._
-import org.apache.spark.ml.util._
+import org.apache.spark.ml.util.{Utils => DALImplUtils, _}
 import org.apache.spark.ml.util.Instrumentation.instrumented
 import org.apache.spark.mllib.linalg.CholeskyDecomposition
 import org.apache.spark.mllib.optimization.NNLS
@@ -921,8 +921,10 @@ object ALS extends DefaultParamsReadable[ALS] with Logging {
     seed: Long = 0L)(
     implicit ord: Ordering[ID]): (RDD[(ID, Array[Float])], RDD[(ID, Array[Float])]) = {
 
+    val isPlatformSupported = DALImplUtils.checkClusterPlatformCompatibility(ratings.sparkContext)
+
     val (userIdAndFactors, itemIdAndFactors) =
-      if (implicitPrefs) {
+      if (implicitPrefs && isPlatformSupported) {
         new ALSDALImpl(ratings, rank, maxIter, regParam, alpha, seed).run()
       } else {
         trainMLlib(ratings, rank, numUserBlocks, numItemBlocks, maxIter, regParam, implicitPrefs,
