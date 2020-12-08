@@ -63,7 +63,7 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
   }
 
   private def ratingsToCSRNumericTables(ratings: RDD[Rating[ID]],
-    nRatings: Long, nVectors: Long, nFeatures: Long, nBlocks: Long): RDD[CSRNumericTable] = {
+    nVectors: Long, nFeatures: Long, nBlocks: Long): RDD[CSRNumericTable] = {
 
 //    val rowSortedRatings = ratings.sortBy(_.user.toString.toLong)
 
@@ -165,17 +165,27 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
     val executorNum = Utils.sparkExecutorNum(data.sparkContext)
     val executorCores = Utils.sparkExecutorCores()
 
-    val largestItems = data.sortBy(_.item.toString.toLong, ascending = false).take(1)
-    val nFeatures = largestItems(0).item.toString.toLong + 1
+    val nFeatures = data.max()(new Ordering[Rating[ID]]() {
+      override def compare(x: Rating[ID], y: Rating[ID]): Int =
+        Ordering[Long].compare(x.item.toString.toLong, y.item.toString.toLong)
+    }).item.toString.toLong + 1
 
-    val largestUsers = data.sortBy(_.user.toString.toLong, ascending = false).take(1)
-    val nVectors = largestUsers(0).user.toString.toLong + 1
+    val nVectors = data.max()(new Ordering[Rating[ID]]() {
+      override def compare(x: Rating[ID], y: Rating[ID]): Int =
+        Ordering[Long].compare(x.user.toString.toLong, y.user.toString.toLong)
+    }).user.toString.toLong + 1
+
+//    val largestItems = data.sortBy(_.item.toString.toLong, ascending = false).take(1)
+//    val nFeatures = largestItems(0).item.toString.toLong + 1
+
+//    val largestUsers = data.sortBy(_.user.toString.toLong, ascending = false).take(1)
+//    val nVectors = largestUsers(0).user.toString.toLong + 1
 
     val nBlocks = executorNum
 
-    val nRatings = data.count()
+//    val nRatings = data.count()
 
-    logInfo(s"ALSDAL fit $nRatings ratings using $executorNum Executors for $nVectors vectors and $nFeatures features")
+    logInfo(s"ALSDAL fit using $executorNum Executors for $nVectors vectors and $nFeatures features")
 
     val executorIPAddress = Utils.sparkFirstExecutorIP(data.sparkContext)
 
@@ -192,7 +202,7 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
 //    dataForConversion.count()
 
 //    val numericTables = ratingsToCSRNumericTables(dataForConversion, nRatings, nVectors, nFeatures, nBlocks)
-    val numericTables = ratingsToCSRNumericTables(data, nRatings, nVectors, nFeatures, nBlocks)
+    val numericTables = ratingsToCSRNumericTables(data, nVectors, nFeatures, nBlocks)
     val results = numericTables.mapPartitionsWithIndex { (index, iter) =>
       val table = iter.next()
       val context = new DaalContext()
