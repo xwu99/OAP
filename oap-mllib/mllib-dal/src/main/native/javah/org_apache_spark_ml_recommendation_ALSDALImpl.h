@@ -15,6 +15,14 @@ extern "C" {
 JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_recommendation_ALSDALImpl_cDALImplictALS
   (JNIEnv *, jobject, jlong, jlong, jint, jint, jdouble, jdouble, jint, jint, jint, jobject);
 
+/*
+ * Class:     org_apache_spark_ml_recommendation_ALSDALImpl
+ * Method:    cShuffleData
+ * Signature: (Ljava/nio/ByteBuffer;IILorg/apache/spark/ml/recommendation/ALSPartitionInfo;)Ljava/nio/ByteBuffer;
+ */
+JNIEXPORT jobject JNICALL Java_org_apache_spark_ml_recommendation_ALSDALImpl_cShuffleData
+  (JNIEnv *, jobject, jobject, jint, jint, jobject);
+
 #ifdef __cplusplus
 }
 #endif

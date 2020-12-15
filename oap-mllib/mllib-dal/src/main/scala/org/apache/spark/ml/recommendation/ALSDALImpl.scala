@@ -11,6 +11,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.ml.recommendation.ALS.Rating
 import org.apache.spark.ml.util._
 
+import java.nio.{ByteBuffer, ByteOrder}
 import scala.collection.mutable.ArrayBuffer
 //import java.nio.DoubleBuffer
 import java.nio.FloatBuffer
@@ -36,6 +37,9 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
   alpha: Double,
   seed: Long,
 ) extends Serializable with Logging {
+
+  // Rating struct size is size of Long+Long+Float
+  val RATING_SIZE = 8 + 8 + 4
 
   // Return Map partitionId -> (ratingsNum, csrRowNum, rowOffset)
   private def getRatingsPartitionInfo(data: RDD[Rating[ID]]): Map[Int, (Int, Int, Int)] = {
@@ -161,6 +165,19 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
 //    null
 //  }
 
+  def ratingsToByteBuffer(ratings: Array[Rating[ID]]): ByteBuffer = {
+    println("ratings len", ratings.length)
+
+    val buffer= ByteBuffer.allocateDirect(ratings.length*(8+8+4))
+    buffer.order(ByteOrder.LITTLE_ENDIAN)
+    ratings.foreach { rating =>
+      buffer.putLong(rating.user.toString.toLong)
+      buffer.putLong(rating.item.toString.toLong)
+      buffer.putFloat(rating.rating)
+    }
+    buffer
+  }
+
   def run(): (RDD[(ID, Array[Float])], RDD[(ID, Array[Float])]) = {
     val executorNum = Utils.sparkExecutorNum(data.sparkContext)
     val executorCores = Utils.sparkExecutorCores()
@@ -189,76 +206,42 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
 
     val executorIPAddress = Utils.sparkFirstExecutorIP(data.sparkContext)
 
-//    val dataForCoalesce = if (data.getNumPartitions < executorNum) {
-//      data.repartition(executorNum).setName("Repartitioned for conversion").cache()
-//    } else {
-//      data
-//    }
-////    println("data.getNumPartitions", data.getNumPartitions)
-//
-////    val dataForConversion = dataForCoalesce.coalesce(1,
-////          partitionCoalescer = Some(new ExecutorInProcessCoalescePartitioner()))
-//    val dataForConversion = dataForCoalesce
-//    dataForConversion.count()
+    val numericTables = if (data.getNumPartitions < executorNum) {
+      data.repartition(executorNum).setName("Repartitioned for conversion").cache()
+    } else {
+      data.coalesce(executorNum).setName("Coalesced for conversion").cache()
+    }
 
-//    val numericTables = ratingsToCSRNumericTables(dataForConversion, nRatings, nVectors, nFeatures, nBlocks)
-    val numericTables = ratingsToCSRNumericTables(data, nVectors, nFeatures, nBlocks)
-    val results = numericTables.mapPartitionsWithIndex { (index, iter) =>
-      val table = iter.next()
-      val context = new DaalContext()
-//      table.unpack(context)
+    val results = numericTables
+      // Transpose the dataset
+      .map { p =>
+        Rating(p.item, p.user, p.rating) }
+      .mapPartitions { iter =>
+        val context = new DaalContext()
+        println("ALSDALImpl: Loading libMLlibDAL.so" )
+        LibLoader.loadLibraries()
 
-//      Service.printNumericTable("Converted Input:", table, 10)
-//
-//    }
+        OneCCL.init(executorNum, executorIPAddress, OneCCL.KVS_PORT)
+        val rankId = OneCCL.rankID()
 
-//    numericTables.foreachPartition(() => _)
+        println("rankId", rankId, "nUsers", nVectors, "nItems", nFeatures)
 
-//    val coalescedRdd = numericTables.coalesce(1,
-//      partitionCoalescer = Some(new ExecutorInProcessCoalescePartitioner()))
-//
-//    coalescedRdd.count()
+        val buffer = ratingsToByteBuffer(iter.toArray)
+        val bufferInfo = new ALSPartitionInfo
+        val shuffledBuffer = cShuffleData(buffer, nFeatures.toInt, nBlocks, bufferInfo)
 
-//    val coalescedTables = coalescedRdd.mapPartitions { iter =>
-//      val context = new DaalContext()
-//      val mergedData = new RowMergedNumericTable(context)
-//
-//      println("ALSDALImpl: Loading libMLlibDAL.so" )
-//      // oneDAL libs should be loaded by now, extract libMLlibDAL.so to temp file and load
-//      LibLoader.loadLibraries()
-//
-//      iter.foreach { curIter =>
-//        OneDAL.cAddNumericTable(mergedData.getCNumericTable, curIter.getCNumericTable)
-//      }
-//      Iterator(mergedData.getCNumericTable)
-//
-//    }.cache()
+        val table = bufferToCSRNumericTable(shuffledBuffer, bufferInfo, nVectors.toInt, nBlocks, rankId)
 
-//    val coalescedTables = numericTables
-//
-//    val results = coalescedTables.mapPartitions { tableIter =>
-//      val tableArr = tableIter.next()
-//
-//      val contextLocal = new DaalContext()
-//      tableArr.unpack(contextLocal)
-//
-      println("ALSDALImpl: Loading libMLlibDAL.so" )
-      LibLoader.loadLibraries()
-
-      OneCCL.init(executorNum, executorIPAddress, OneCCL.KVS_PORT)
-
-      println("nUsers", nVectors, "nItems", nFeatures)
-
-      val result = new ALSResult()
-      cDALImplictALS(
-        table.getCNumericTable, nUsers = nVectors,
-        rank, maxIter, regParam, alpha,
-        executorNum,
-        executorCores,
-        index,
-        result
-      )
-      Iterator(result)
+        val result = new ALSResult()
+        cDALImplictALS(
+          table.getCNumericTable, nUsers = nVectors,
+          rank, maxIter, regParam, alpha,
+          executorNum,
+          executorCores,
+          rankId,
+          result
+        )
+        Iterator(result)
     }.cache()
 
 //    results.foreach { p =>
@@ -325,6 +308,56 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
     (usersFactorsRDD, itemsFactorsRDD)
   }
 
+  private def getPartitionOffset(partitionId: Int, nRatings: Int, nBlocks: Int): Int = {
+    require(partitionId >=0 && partitionId < nBlocks)
+    val itemsInBlock = nRatings / nBlocks
+    return partitionId * itemsInBlock
+  }
+
+  private def bufferToCSRNumericTable(buffer: ByteBuffer, info: ALSPartitionInfo,
+                                      nVectors: Int, nBlocks: Int, rankId: Int): CSRNumericTable = {
+    val ratingsNum = info.ratingsNum
+    val csrRowNum = info.csrRowNum
+    val values = Array.fill(ratingsNum) { 0.0f }
+    val columnIndices = Array.fill(ratingsNum) { 0L }
+    val rowOffsets = ArrayBuffer[Long](1L)
+
+    var index = 0
+    var curRow = 0L
+    // Each partition converted to one CSRNumericTable
+    for (i <- 0 until ratingsNum) {
+      // Modify row index for each partition (start from 0)
+      val row = buffer.getLong(i*RATING_SIZE) - getPartitionOffset(rankId, ratingsNum, nBlocks)
+      val column = buffer.getLong(i*RATING_SIZE+8)
+      val rating = buffer.getFloat(i*RATING_SIZE+16)
+
+      values(index) = rating
+      // one-based index
+      columnIndices(index) = column + 1
+
+      if (row > curRow) {
+        curRow = row
+        // one-based index
+        rowOffsets += index + 1
+      }
+
+      index = index + 1
+    }
+    // one-based row index
+    rowOffsets += index+1
+
+    println("rankId:", rankId)
+    println("csrRowNum", csrRowNum)
+
+    val contextLocal = new DaalContext()
+    val cTable = OneDAL.cNewCSRNumericTable(values, columnIndices, rowOffsets.toArray, nVectors, csrRowNum)
+    val table = new CSRNumericTable(contextLocal, cTable)
+
+    println("Input dimensions:", table.getNumberOfRows, table.getNumberOfColumns)
+
+    table
+  }
+
   // Single entry to call Implict ALS DAL backend
   @native private def cDALImplictALS(data: Long, 
                                      nUsers: Long,
@@ -334,7 +367,10 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
                                      alpha: Double,
                                      executor_num: Int,
                                      executor_cores: Int,
-                                     partitionId: Int,
+                                     rankId: Int,
                                      result: ALSResult): Long
-
+  @native private def cShuffleData(data: ByteBuffer,
+                                   nTotalKeys: Int,
+                                   nBlocks: Int,
+                                   info: ALSPartitionInfo): ByteBuffer
 }
