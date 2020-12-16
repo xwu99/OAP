@@ -581,7 +581,7 @@ JNIEXPORT jobject JNICALL Java_org_apache_spark_ml_recommendation_ALSDALImpl_cSh
   env->SetIntField(infoObj, ratingsNumField, newRatingsNum);
   env->SetIntField(infoObj, csrRowNumField, newCsrRowNum);
   
-  return env->NewDirectByteBuffer(ratings, ratingsNum);  
+  return env->NewDirectByteBuffer(ratings, newRatingsNum*RATING_SIZE);
 }
 
 /*
@@ -594,6 +594,7 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_recommendation_ALSDALImpl_cDALI
     JNIEnv* env, jobject obj, jlong numTableAddr, jlong nUsers, jint nFactors,
     jint maxIter, jdouble regParam, jdouble alpha, jint executor_num, jint executor_cores,
     jint partitionId, jobject resultObj) {
+      
   size_t rankId;
   ccl_get_comm_rank(NULL, &rankId);
 
@@ -604,7 +605,7 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_recommendation_ALSDALImpl_cDALI
   cout << "ALS (native): Input info: " << endl;
   cout << "- NumberOfRows: " << dataTable->getNumberOfRows() << endl;
   cout << "- NumberOfColumns: " << dataTable->getNumberOfColumns() << endl;
-  cout << "- DataSize: " << dataTable->getDataSize() << endl;
+  cout << "- NumberOfRatings: " << dataTable->getDataSize() << endl;
   cout << "- fullNUsers: " << nUsers << endl;
 
   // Set number of threads for oneDAL to use for each rank
@@ -626,9 +627,9 @@ JNIEXPORT jlong JNICALL Java_org_apache_spark_ml_recommendation_ALSDALImpl_cDALI
   // itemsPartialResultsMaster[i]->get(training::outputOfStep4ForStep1)->getIndices();
 
   std::cout << "\n=== Results for Rank " << rankId << "===\n" << std::endl;
-  std::cout << "Partition ID: " << partitionId << std::endl;
-  printNumericTable(pUser, "User Factors:", 10);
-  printNumericTable(pItem, "Item Factors:", 10);
+  // std::cout << "Partition ID: " << partitionId << std::endl;
+  printNumericTable(pUser, "User Factors (first 10 rows):", 10);
+  printNumericTable(pItem, "Item Factors (first 10 rows):", 10);
   std::cout << "User Offset: " << getOffsetFromOffsetTable(userOffset) << std::endl;
   std::cout << "Item Offset: " << getOffsetFromOffsetTable(itemOffset) << std::endl;
   std::cout << std::endl;

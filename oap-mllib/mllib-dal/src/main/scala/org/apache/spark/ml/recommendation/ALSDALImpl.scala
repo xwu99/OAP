@@ -166,9 +166,10 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
 //  }
 
   def ratingsToByteBuffer(ratings: Array[Rating[ID]]): ByteBuffer = {
-    println("ratings len", ratings.length)
+//    println("ratings len", ratings.length)
 
     val buffer= ByteBuffer.allocateDirect(ratings.length*(8+8+4))
+    // Use little endian
     buffer.order(ByteOrder.LITTLE_ENDIAN)
     ratings.foreach { rating =>
       buffer.putLong(rating.user.toString.toLong)
@@ -230,7 +231,7 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
         val bufferInfo = new ALSPartitionInfo
         val shuffledBuffer = cShuffleData(buffer, nFeatures.toInt, nBlocks, bufferInfo)
 
-        val table = bufferToCSRNumericTable(shuffledBuffer, bufferInfo, nVectors.toInt, nBlocks, rankId)
+        val table = bufferToCSRNumericTable(shuffledBuffer, bufferInfo, nVectors.toInt, nFeatures.toInt, nBlocks, rankId)
 
         val result = new ALSResult()
         cDALImplictALS(
@@ -315,7 +316,10 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
   }
 
   private def bufferToCSRNumericTable(buffer: ByteBuffer, info: ALSPartitionInfo,
-                                      nVectors: Int, nBlocks: Int, rankId: Int): CSRNumericTable = {
+                                      nVectors: Int, nFeatures: Int, nBlocks: Int, rankId: Int): CSRNumericTable = {
+    // Use little endian
+    buffer.order(ByteOrder.LITTLE_ENDIAN)
+
     val ratingsNum = info.ratingsNum
     val csrRowNum = info.csrRowNum
     val values = Array.fill(ratingsNum) { 0.0f }
@@ -327,7 +331,7 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
     // Each partition converted to one CSRNumericTable
     for (i <- 0 until ratingsNum) {
       // Modify row index for each partition (start from 0)
-      val row = buffer.getLong(i*RATING_SIZE) - getPartitionOffset(rankId, ratingsNum, nBlocks)
+      val row = buffer.getLong(i*RATING_SIZE) - getPartitionOffset(rankId, nFeatures, nBlocks)
       val column = buffer.getLong(i*RATING_SIZE+8)
       val rating = buffer.getFloat(i*RATING_SIZE+16)
 
@@ -346,14 +350,19 @@ class ALSDALImpl[@specialized(Int, Long) ID: ClassTag](
     // one-based row index
     rowOffsets += index+1
 
-    println("rankId:", rankId)
-    println("csrRowNum", csrRowNum)
+//    println("rankId:", rankId)
+//    println("csrRowNum", csrRowNum)
+
+//    println(rowOffsets.mkString(" "))
+//    println(columnIndices.mkString(" "))
+//    println(values.mkString(" "))
 
     val contextLocal = new DaalContext()
     val cTable = OneDAL.cNewCSRNumericTable(values, columnIndices, rowOffsets.toArray, nVectors, csrRowNum)
     val table = new CSRNumericTable(contextLocal, cTable)
 
     println("Input dimensions:", table.getNumberOfRows, table.getNumberOfColumns)
+//    Service.printNumericTable("Input NumericTable", table)
 
     table
   }
