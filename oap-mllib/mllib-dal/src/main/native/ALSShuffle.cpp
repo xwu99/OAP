@@ -19,7 +19,7 @@ jlong getPartiton(jlong key, jlong totalKeys, long nBlocks) {
 }
 
 // Compares two Rating according to userId. 
-bool compareRatingByUser(Rating &r1, Rating &r2)
+bool compareRatingByUser(Rating r1, Rating r2)
 { 
   if (r1.user < r2.user)
     return true;
@@ -105,3 +105,4 @@ Rating * shuffle_all2all(std::vector<RatingPartition> &partitions, size_t nBlock
 
   return recvData.data();
 }
+
